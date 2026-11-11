@@ -447,9 +447,13 @@ async function loadCloud() {
         return;
     }
     text($("cloud-title"), c.connected ? (c.name || "Google Drive") : "Google Drive");
-    text($("cloud-account"), c.connected ? "● Connected as " + c.email : c.needsReauth
-        ? "Google asked Zyclipra to sign in again. Open Zyclipra on your PC › Settings › Cloud & Sync › Reconnect."
-        : "Not connected. Connect your Google account in the Zyclipra app on your PC (Settings › Cloud & Sync).");
+    text($("cloud-account"), c.connected ? "● Connected as " + c.email : !c.configured
+        ? "This copy of Zyclipra was built without Google sign-in."
+        : (c.needsReauth ? "Google asked Zyclipra to sign in again. " : "Not connected. ")
+            + "Sign in with Google – the Google window opens in the browser on your PC.");
+    $("cloud-connect").hidden = c.connected || !c.configured;
+    text($("cloud-connect"), c.needsReauth ? "Sign in with Google again" : "Sign in with Google");
+    $("cloud-disconnect").hidden = !c.connected;
     $("cloud-account").className = c.connected ? "ok-text" : c.needsReauth ? "warn-text" : "muted";
     const folder = $("cloud-folder");
     folder.hidden = !c.connected;
@@ -606,6 +610,14 @@ document.addEventListener("DOMContentLoaded", () => {
         $("pref-" + p).addEventListener("change", () => {
             api("cloud/settings", { [p]: $("pref-" + p).checked }).then(() => { toast("Saved"); loadCloud(); }).catch(e => { toast(e.message, true); loadCloud(); });
         });
+    $("cloud-connect").addEventListener("click", () => action("cloud/connect", $("cloud-connect"), () => {
+        for (const ms of [5000, 15000, 30000, 60000])
+            window.setTimeout(() => loadCloud().catch(() => undefined), ms);
+    }));
+    $("cloud-disconnect").addEventListener("click", () => {
+        if (window.confirm("Disconnect Google Drive? Zyclipra stops uploading. Nothing is deleted on Google Drive or your PC."))
+            action("cloud/disconnect", $("cloud-disconnect"), () => loadCloud().catch(() => undefined));
+    });
     $("retry-all").addEventListener("click", () => api("cloud/retry", {}).then(r => { toast(r.ok || ""); loadCloud(); }).catch(e => toast(e.message, true)));
     $("pw-form").addEventListener("submit", changePassword);
     $("user-form").addEventListener("submit", changeUsername);

@@ -371,6 +371,8 @@ public final class DashboardServer {
             case "POST cloud/upload" -> send(ex, 200, control.cloudUpload(checkId(str(body, "id"))));
             case "POST cloud/retry" -> send(ex, 200, control.cloudRetry(body.has("id") ? checkId(str(body, "id")) : null));
             case "POST cloud/cancel" -> send(ex, 200, control.cloudCancel(checkId(str(body, "id"))));
+            case "POST cloud/connect" -> send(ex, 200, control.cloudConnect());
+            case "POST cloud/disconnect" -> send(ex, 200, control.cloudDisconnect());
             default -> send(ex, 404, json("error", "unknown endpoint"));
         }
     }

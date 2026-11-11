@@ -305,3 +305,5 @@
 .titled-pane.plain-titled > .title > .text { -fx-fill: #D5D9E0; -fx-font-weight: 700; }
 .titled-pane.plain-titled > .title > .arrow-button > .arrow { -fx-background-color: -muted; }
 .titled-pane.plain-titled > .content { -fx-background-color: -card; -fx-border-color: transparent; -fx-padding: 4 20 18 20; }
+.google-signin { -fx-background-color: white; -fx-text-fill: #1F1F1F; -icon-color: #4285F4; -fx-font-weight: 600; -fx-padding: 9 18; }
+.google-signin:hover { -fx-background-color: #F1F3F4; }

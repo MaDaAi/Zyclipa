@@ -2,6 +2,25 @@
 
 _Last updated: 2026-11-09 · version 0.1.0_
 
+## Round 11 (2026-11-11): one-click "Sign in with Google" – verified with a real account
+
+- **Bug fixed**: the Connect button's enabled state was computed once when the page opened, so pasting a client ID never enabled it.
+- **Built-in OAuth client**:
+  - The owner's Desktop OAuth client is packaged from `app/private/google-oauth.json` (git-ignored, Windows permissions limited to the owner).
+  - Users no longer see any Google Cloud setup. Settings › Cloud & Sync shows a single **Sign in with Google** button; the dashboard's Cloud & Sync tab has Sign in with Google (the window opens in the browser on the PC) and Disconnect.
+  - The values an older version kept in settings.json are removed on first start. Builds without the file simply have no Google sign-in.
+- **Profile picture**: Google's default letter avatars are PNG; they're now converted to JPEG (they were skipped before). The picture is fetched on start if missing.
+- **Exe**: `packaging/build-installer.ps1` gained `-Dest`; `dist/Zyclipra` was rebuilt with the icon and built-in sign-in. An MSI or setup exe still needs WiX.
+
+**Verified with the owner's real Google account (not mocked)**
+- Sign in with Google in the browser, profile name loaded, token stored in Windows Credential Manager (no token file on disk).
+- A real upload: a 566,589-byte instant replay went to Zyclipra/Clips and was marked Synced only after Drive returned a matching size and MD5.
+- A real download of that file through Zyclipra's Drive client: byte-identical (same MD5 as the local clip and as Drive's checksum).
+- Profile picture fetched and stored as a readable JPEG.
+- `mvnw package`: 55 tests, 0 failures, 9 skipped.
+
+**Not yet verified live**: automatic upload of a brand-new clip, and the dashboard's Sign in with Google button against the real account (the API path is covered by tests).
+
 ## Round 10 (2026-11-11): Google Drive sync, dashboard sign-in, hosting modes
 
 **Built**

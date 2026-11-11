@@ -78,6 +78,16 @@ public final class AppContext implements RemoteControl {
         sync = new SyncService(store, library, bus,
                 new io.zyclipra.cloud.CredentialStore("Zyclipra/google-drive", new SecretStore(paths.tokenFile())),
                 paths.root().resolve("google-avatar.jpg"), paths.root().resolve("sync-queue.json"));
+        // The Google OAuth client now comes built into the app; forget copies an older version kept in settings.json.
+        if ("built-in".equals(sync.auth().client().source()) && (!settings.cloud.clientId.isBlank() || !settings.cloud.clientSecret.isBlank())) {
+            settings.cloud.clientId = "";
+            settings.cloud.clientSecret = "";
+            store.saveNow();
+            LOG.info("Google sign-in now uses the built-in client; removed the old client details from settings");
+        }
+        // Signed in by an older version (or the picture failed before): fetch name and picture in the background.
+        if (sync.connected() && (sync.auth().avatar() == null || !java.nio.file.Files.exists(sync.auth().avatar())))
+            java.util.concurrent.CompletableFuture.runAsync(() -> { sync.auth().loadProfile(); store.save(); });
         dashboardAuth = new DashboardAuth(settings.remote, store::saveNow);
         dashboard = new DashboardServer(settings.remote, dashboardAuth, this, paths.keystore(),
                 new SecretStore(paths.root().resolve("dashboard-tls.key")));
@@ -339,6 +349,30 @@ public final class AppContext implements RemoteControl {
     }
 
     @Override public JsonElement cloudCancel(String clipId) { return result(sync.cancel(clipId)); }
+
+    private volatile boolean signingIn;
+
+    @Override public JsonElement cloudConnect() {
+        if (!sync.auth().available()) throw new IllegalStateException("This copy of Zyclipra was built without Google sign-in.");
+        if (sync.connected()) return result("Already connected to Google Drive.");
+        if (signingIn) return result("Google sign-in is already open in the browser on your PC.");
+        signingIn = true;
+        sync.auth().signIn(url -> {
+            try { java.awt.Desktop.getDesktop().browse(java.net.URI.create(url)); }
+            catch (Exception e) { bus.emit(EventBus.ERROR, "Couldn't open the browser for Google sign-in: " + e.getMessage()); }
+        }).whenComplete((email, err) -> {
+            signingIn = false;
+            store.save();
+            if (err != null) bus.emit(EventBus.ERROR, "Google sign-in: " + (err.getCause() != null ? err.getCause().getMessage() : err.getMessage()));
+            else bus.emit(EventBus.NOTIFY, "Connected to Google Drive as " + email);
+        });
+        return result("Google sign-in opened in the browser on your PC – choose your account there and allow access.");
+    }
+
+    @Override public JsonElement cloudDisconnect() {
+        try { sync.disconnect(); } catch (java.io.IOException e) { throw new IllegalStateException("Disconnect: " + e.getMessage()); }
+        return result("Google Drive disconnected. Nothing was deleted on Google Drive or your PC.");
+    }
 
     @Override public java.util.Optional<java.nio.file.Path> cloudAvatar() {
         java.nio.file.Path p = sync.auth().avatar();

@@ -21,3 +21,6 @@ settings.json
 library.json
 .env
 .claude/
+
+# Zyclipra's Google OAuth client (packaged into builds, never published)
+/private/

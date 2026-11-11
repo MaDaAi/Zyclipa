@@ -64,6 +64,7 @@ class CloudSyncTest {
         SyncService s = new SyncService(store, library, bus, tokens, tmp.resolve("avatar.jpg"), tmp.resolve("sync-queue.json"),
                 HttpClient.newHttpClient(), google.base);
         s.auth().endpoints(google.base);
+        s.auth().client(new io.zyclipra.cloud.GoogleClient("test-client.apps.googleusercontent.com", "test-secret", "test")); // never the real built-in client
         s.backoff(50);
         return s;
     }
@@ -137,6 +138,7 @@ class CloudSyncTest {
         assertEquals("Test Player", store.get().cloud.accountName);
         assertEquals("refresh-1", tokens.load(), "refresh token kept in the secret store");
         assertTrue(Files.isRegularFile(tmp.resolve("avatar.jpg")), "profile picture cached");
+        assertNotNull(javax.imageio.ImageIO.read(tmp.resolve("avatar.jpg").toFile()), "a PNG avatar is stored as a readable JPEG");
         store.saveNow();
         assertFalse(Files.readString(tmp.resolve("settings.json")).contains("refresh-1"), "never in settings.json");
     }

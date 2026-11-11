@@ -4,13 +4,15 @@
 # Run from the project folder after `mvn package`.
 param(
     [ValidateSet('app-image', 'msi', 'exe')] [string] $Type = 'app-image',
-    [string] $Version = '0.1.0'
+    [string] $Version = '0.1.0',
+    [string] $Dest = ''
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $jar = Join-Path $root 'target/zyclipra.jar'
 if (-not (Test-Path $jar)) { throw "Build first: mvn package (missing $jar)" }
 
+if (-not $Dest) { $Dest = Join-Path $root 'dist' }
 $inDir = Join-Path $root 'target/jpackage-input'
 New-Item -ItemType Directory -Force $inDir | Out-Null
 Copy-Item $jar $inDir -Force
@@ -27,7 +29,7 @@ $jpArgs = @(
     '--java-options', '--enable-native-access=ALL-UNNAMED',
     '--java-options', '-Xmx384m',
     '--icon', (Join-Path $PSScriptRoot 'zyclipra.ico'),
-    '--dest', (Join-Path $root 'dist')
+    '--dest', $Dest
 )
 if ($Type -ne 'app-image') {
     # Per-user install: no administrator rights needed.
@@ -42,4 +44,4 @@ $jp = 'jpackage'
 if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin/jpackage.exe'))) { $jp = Join-Path $env:JAVA_HOME 'bin/jpackage.exe' }
 & $jp @jpArgs
 if ($LASTEXITCODE -ne 0) { throw "jpackage failed ($LASTEXITCODE)" }
-Write-Host "Done: $(Join-Path $root 'dist')"
+Write-Host "Done: $Dest"

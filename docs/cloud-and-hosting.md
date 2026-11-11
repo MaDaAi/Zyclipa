@@ -17,17 +17,11 @@ your PC. Clips that aren't uploaded are never touched.
 
 ## Connecting Google Drive
 
-Zyclipra doesn't ship Google keys of its own, so you create a free "OAuth client" once. It takes about five minutes.
+1. *Settings › Cloud & Sync* in Zyclipra (or *Cloud & Sync* on the dashboard) › **Sign in with Google**.
+2. Google opens in your browser on the PC. Choose your account and allow access.
+3. The tab says Zyclipra is connected, and your name, email and picture appear in Zyclipra.
 
-1. Open <https://console.cloud.google.com>, sign in, and create a project (any name).
-2. *APIs & Services › Library*: enable **Google Drive API**.
-3. *APIs & Services › OAuth consent screen*: choose **External**, fill in the app name and your
-   email, and add your own Google address under **Test users**. You can leave it in "Testing".
-4. *APIs & Services › Credentials › Create credentials › OAuth client ID*, application type
-   **Desktop app**. Copy the **client ID** and **client secret**.
-5. In Zyclipra: *Settings › Cloud & Sync › Google Cloud setup*, paste both, then press
-   **Connect Google account**. Your normal browser opens Google's own sign-in page. Approve access,
-   and the tab tells you Zyclipra is connected.
+That's all – there's nothing to set up in Google Cloud.
 
 What Zyclipra asks Google for:
 
@@ -38,18 +32,38 @@ What Zyclipra asks Google for:
 
 How it's protected:
 
-- Sign-in uses the official OAuth 2.0 flow for installed apps, with PKCE (S256), in your own browser,
+- Sign-in uses Google's official OAuth 2.0 flow for installed apps: PKCE (S256), your own browser,
   and a one-time redirect to `http://127.0.0.1:<random port>`.
 - Your Google password never reaches Zyclipra.
-- The long-lived refresh token is stored in **Windows Credential Manager** (look for
-  `Zyclipra/google-drive`). Access tokens are only kept in memory.
+- The refresh token is stored in **Windows Credential Manager** (`Zyclipra/google-drive`). Access
+  tokens are only kept in memory.
 - Tokens are never written to settings files or logs, and never sent to the dashboard.
-- Google documents a Desktop client's "secret" as not confidential. Zyclipra keeps it in your
-  settings file on this PC and never ships one.
+- On the dashboard, **Sign in with Google** opens the Google window in the browser **on the PC**,
+  because Google sends the result back to the PC.
 
-**Testing mode note:** while your consent screen is in "Testing", Google expires the sign-in after
-7 days. Zyclipra then shows *Reconnect Google account*. Publishing the consent screen (still only
-used by you) removes that limit.
+### For developers: Zyclipra's OAuth client
+
+Builds include Zyclipra's own Google OAuth client ("Desktop app" type) from
+`app/private/google-oauth.json`. That file is listed in `.gitignore` and is never committed, so a
+fresh clone (or CI) builds without Google sign-in. To enable it in your own build, create that
+file:
+
+```json
+{ "client_id": "....apps.googleusercontent.com", "client_secret": "GOCSPX-..." }
+```
+
+Google's downloaded `client_secret_*.json` (with an `"installed"` section) works too. You can also
+set the `ZYCLIPRA_GOOGLE_CLIENT_ID` and `ZYCLIPRA_GOOGLE_CLIENT_SECRET` environment variables. Google
+documents that a desktop app's client details can't stay secret once the app is shipped; security
+comes from PKCE, the loopback redirect and each user's consent. Keeping the file out of git just
+avoids publishing it.
+
+The client's consent screen decides who can sign in:
+
+- **Testing:** only the listed test users, and Google signs Zyclipra out every 7 days (**Sign in
+  with Google again**).
+- **In production:** anyone, with no weekly sign-out. `drive.file` and the profile scopes don't
+  need Google's app verification.
 
 ## How syncing works
 
@@ -189,7 +203,7 @@ without one.
 | Dashboard: "Too many attempts" | Wait a few minutes (it lifts by itself), or restart Zyclipra. |
 | Dashboard: forgot the password | In the Zyclipra app, *Settings › Hosting* – change it with the current password. If you don't know it, close Zyclipra, delete the `username` and `passwordHash` values under `remote` in `%APPDATA%\Zyclipra\settings.json`, and create a new sign-in. |
 | Browser certificate warning | Expected for the PC's own certificate; check the fingerprint. |
-| Google: `invalid_client` | The client ID or secret in *Settings › Cloud & Sync* is wrong, or the client isn't a *Desktop app*. |
-| Google: "access blocked / app not verified" | Add your address under *Test users* on the OAuth consent screen. |
-| Google: "Google didn't return a refresh token" | Remove Zyclipra at myaccount.google.com › Security › Third-party access, then connect again. |
-| Google: "Reconnect" keeps coming back after a week | Your consent screen is in Testing mode – see the note above. |
+| Google: "access blocked" / "app not verified" | While the app is in Testing mode only listed test users can sign in; on "Google hasn't verified this app" choose *Continue*. |
+| Google: `invalid_client` | Zyclipra's OAuth client was deleted or changed in Google Cloud – rebuild with the current `private/google-oauth.json`. |
+| Google: "Google didn't return a refresh token" | Remove Zyclipra at myaccount.google.com › Security › Third-party access, then sign in again. |
+| Google: "Sign in with Google again" every week | The OAuth consent screen is in Testing mode – see above. |

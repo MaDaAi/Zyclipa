@@ -50,6 +50,10 @@ public interface RemoteControl {
     /** Retries one failed upload, or every failed upload when {@code clipId} is null. */
     default JsonElement cloudRetry(String clipId) { throw new IllegalStateException("Google Drive isn't available here."); }
     default JsonElement cloudCancel(String clipId) { throw new IllegalStateException("Google Drive isn't available here."); }
+    /** Opens Google's sign-in in the browser on the PC (the result comes back to the PC, not the phone). */
+    default JsonElement cloudConnect() { throw new IllegalStateException("Google Drive isn't available here."); }
+    /** Signs out of Google Drive. Nothing is deleted on Drive or the PC. */
+    default JsonElement cloudDisconnect() { throw new IllegalStateException("Google Drive isn't available here."); }
     /** The Google profile picture, cached on this PC. */
     default Optional<Path> cloudAvatar() { return Optional.empty(); }
 }

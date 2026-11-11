@@ -434,10 +434,11 @@ public final class SettingsView implements View {
                     ? "Google asked Zyclipra to sign in again (the saved sign-in was revoked or expired" + (c.accountEmail.isBlank() ? "" : " for " + c.accountEmail) + "). Uploads are paused until you reconnect."
                     : "Not connected. Everything works without Google Drive – it's only an optional backup.", "setting-desc");
             if (c.needsReauth) st.getStyleClass().setAll("label", "warn-text");
-            Button connect = Ui.button(c.needsReauth ? "Reconnect Google account" : "Connect Google account", Icons.CLOUD, () -> { }, "primary");
+            Button connect = Ui.button(c.needsReauth ? "Sign in with Google again" : "Sign in with Google", Icons.CLOUD, () -> { }, "primary");
+            connect.getStyleClass().add("google-signin");
             connect.setOnAction(e -> {
                 connect.setDisable(true);
-                st.setText("Finish signing in in your browser… (this window waits up to 5 minutes)");
+                st.setText("Finish signing in in the browser window that just opened… (Zyclipra waits up to 5 minutes)");
                 sync.auth().signIn(url -> DriveSyncBox.browse(url)).whenComplete((email, err) -> Ui.fx(() -> {
                     save();
                     if (err != null) {
@@ -451,32 +452,12 @@ public final class SettingsView implements View {
                     }
                 }));
             });
-            connect.setDisable(c.clientId.isBlank());
-            account.getChildren().addAll(st, Ui.row(12, connect, c.clientId.isBlank() ? Ui.label("First fill in the Google Cloud setup below.", "small", "muted") : Ui.grow()));
+            boolean can = sync.auth().available();
+            connect.setDisable(!can);
+            account.getChildren().addAll(st, Ui.row(12, connect, can
+                    ? Ui.label("Opens Google in your browser – choose your account and allow access to the files Zyclipra creates.", "small", "muted")
+                    : Ui.label("This copy of Zyclipra was built without Google sign-in.", "small", "warn-text")));
         }
-
-        // --- one-time Google Cloud setup
-        TextField clientId = new TextField(c.clientId);
-        clientId.setPromptText("xxxxxxxx.apps.googleusercontent.com");
-        clientId.textProperty().addListener((o, a, b) -> { c.clientId = b.trim(); save(); });
-        PasswordField secret = new PasswordField();
-        secret.setText(c.clientSecret);
-        secret.setPromptText("The client secret Google shows for the Desktop client");
-        secret.textProperty().addListener((o, a, b) -> { c.clientSecret = b.trim(); save(); });
-        TextField folder = new TextField(c.folderName);
-        folder.textProperty().addListener((o, a, b) -> { if (!b.isBlank() && b.length() <= 80 && !b.contains("/")) { c.folderName = b.trim(); save(); } });
-        VBox setupBody = new VBox(12,
-                Ui.label("Zyclipra doesn't come with Google keys of its own, so you make a free one-time “OAuth client” in your Google account:\n"
-                        + "1.  Open console.cloud.google.com, create a project and enable the Google Drive API.\n"
-                        + "2.  OAuth consent screen: choose External, add your own Google address under Test users.\n"
-                        + "3.  Credentials › Create credentials › OAuth client ID › Desktop app. Paste the client ID and secret here.\n"
-                        + "Google says a Desktop client's secret isn't confidential; it's still only kept in your settings on this PC.", "small", "muted"),
-                Ui.row(12, Ui.field("OAuth client ID", clientId), Ui.field("Client secret", secret)),
-                Ui.row(12, Ui.field("Folder name on Google Drive", folder)),
-                Ui.row(12, Ui.button("Open Google Cloud console", null, () -> DriveSyncBox.browse("https://console.cloud.google.com/apis/credentials"), "outline")));
-        javafx.scene.control.TitledPane setup = new javafx.scene.control.TitledPane("Google Cloud setup (one time)", setupBody);
-        setup.setExpanded(c.clientId.isBlank());
-        setup.getStyleClass().add("plain-titled");
 
         // --- what gets uploaded
         VBox prefs = Ui.section("Automatic upload", sw(c.autoUpload, "Automatic upload", v -> { c.autoUpload = v; save(); }));
@@ -530,7 +511,7 @@ public final class SettingsView implements View {
         });
 
         return pageBox("Cloud & Sync", "Optional: keep copies of your clips on your own Google Drive. Zyclipra can only see files it created there.",
-                account, spacer(14), setup, spacer(14), prefs, spacer(14), storage, spacer(14), status);
+                account, spacer(14), prefs, spacer(14), storage, spacer(14), status);
     }
 
     private void fillQueue(VBox queue, Label summary) {

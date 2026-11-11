@@ -580,7 +580,7 @@ public final class SyncService {
     public JsonObject statusJson() {
         JsonObject o = new JsonObject();
         o.addProperty("available", true);
-        o.addProperty("configured", !cfg.clientId.isBlank());
+        o.addProperty("configured", auth.available());
         o.addProperty("connected", connected());
         o.addProperty("needsReauth", cfg.needsReauth);
         o.addProperty("name", cfg.accountName);

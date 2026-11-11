@@ -29,9 +29,8 @@ import java.util.logging.Logger;
 
 /**
  * Google sign-in for installed apps: OAuth 2.0 authorization code flow with PKCE (S256), opened in the
- * user's own browser, with a one-time loopback redirect (http://127.0.0.1:random-port). Zyclipra ships no
- * client id or secret: the user creates a free "Desktop app" OAuth client and pastes its id (and the
- * secret Google shows with it, which Google documents as not confidential for desktop apps).
+ * user's own browser, with a one-time loopback redirect (http://127.0.0.1:random-port). The app's own
+ * "Desktop app" OAuth client is built in ({@link GoogleClient}); users just choose their account and allow access.
  * Scopes: openid, email, profile (name and picture) and drive.file (only files Zyclipra made itself).
  * The refresh token is kept in Windows Credential Manager; access tokens live only in memory.
  */
@@ -43,6 +42,7 @@ public final class GoogleAuth {
     private final Secrets secrets;
     private final HttpClient http;
     private final Path avatarFile;
+    private volatile GoogleClient client;
     private Runnable changed = () -> { };
     private String accessToken;
     private long accessExpiry;
@@ -56,7 +56,17 @@ public final class GoogleAuth {
         this.secrets = secrets;
         this.http = http;
         this.avatarFile = avatarFile;
+        this.client = GoogleClient.load(cfg);
     }
+
+    /** The OAuth client in use (never shown to users). */
+    public GoogleClient client() { return client; }
+
+    /** Tests: use a specific client. */
+    public void client(GoogleClient c) { client = c; }
+
+    /** Whether this build can sign in to Google at all. */
+    public boolean available() { return client.available(); }
 
     /** For tests: point every Google endpoint at a local fake. */
     public void endpoints(String base) {
@@ -78,7 +88,8 @@ public final class GoogleAuth {
      */
     public CompletableFuture<String> signIn(Consumer<String> openBrowser) {
         return CompletableFuture.supplyAsync(() -> {
-            if (cfg.clientId.isBlank()) throw new IllegalStateException("Enter your Google OAuth client ID first (Settings › Cloud & Sync).");
+            GoogleClient gc = client;
+            if (!gc.available()) throw new IllegalStateException("This copy of Zyclipra was built without Google sign-in, so Google Drive isn't available.");
             Pkce pkce = new Pkce();
             HttpServer server;
             try {
@@ -103,7 +114,7 @@ public final class GoogleAuth {
             });
             server.start();
             try {
-                String url = authEndpoint + "?response_type=code&client_id=" + enc(cfg.clientId) + "&redirect_uri=" + enc(redirect)
+                String url = authEndpoint + "?response_type=code&client_id=" + enc(gc.clientId()) + "&redirect_uri=" + enc(redirect)
                         + "&scope=" + enc(SCOPES) + "&code_challenge=" + pkce.challenge + "&code_challenge_method=S256"
                         + "&state=" + pkce.state + "&access_type=offline&prompt=consent";
                 openBrowser.accept(url);
@@ -111,9 +122,9 @@ public final class GoogleAuth {
                 if (q.containsKey("error")) throw new IllegalStateException(q.get("error").equals("access_denied")
                         ? "You didn't allow access in Google's window." : "Google said: " + q.get("error"));
                 if (!pkce.state.equals(q.get("state"))) throw new IllegalStateException("The sign-in reply didn't match this request, so it was ignored. Try again.");
-                String form = "grant_type=authorization_code&code=" + enc(q.get("code")) + "&client_id=" + enc(cfg.clientId)
+                String form = "grant_type=authorization_code&code=" + enc(q.get("code")) + "&client_id=" + enc(gc.clientId())
                         + "&redirect_uri=" + enc(redirect) + "&code_verifier=" + pkce.verifier
-                        + (cfg.clientSecret.isBlank() ? "" : "&client_secret=" + enc(cfg.clientSecret));
+                        + (gc.clientSecret().isBlank() ? "" : "&client_secret=" + enc(gc.clientSecret()));
                 JsonObject tok = post(tokenEndpoint, form);
                 if (!tok.has("refresh_token")) throw new IllegalStateException("Google didn't return a refresh token. Remove Zyclipra at myaccount.google.com › Security › Third-party access, then connect again.");
                 if (!grantedDrive(tok)) throw new IllegalStateException("Google Drive access wasn't allowed. Connect again and tick the Google Drive box.");
@@ -162,13 +173,28 @@ public final class GoogleAuth {
                     try (InputStream in = img.body()) {
                         byte[] b = in.readNBytes(1_000_001);
                         String type = img.headers().firstValue("Content-Type").orElse("");
-                        if (img.statusCode() == 200 && b.length <= 1_000_000 && type.startsWith("image/jpeg")) Files.write(avatarFile, b); // the cache file is .jpg; other formats are skipped
+                        // Google serves photos as JPEG and the default letter avatars as PNG; keep a JPEG copy either way.
+                        if (img.statusCode() == 200 && b.length <= 1_000_000 && type.startsWith("image/")) saveAsJpeg(b);
                     }
                 }
             }
         } catch (Exception e) {
             LOG.info("Couldn't load the Google profile: " + e.getMessage());
         }
+    }
+
+    private void saveAsJpeg(byte[] picture) throws IOException {
+        java.awt.image.BufferedImage in = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(picture));
+        if (in == null || in.getWidth() > 2048 || in.getHeight() > 2048) return; // not a picture Java can read, or absurdly large
+        java.awt.image.BufferedImage rgb = new java.awt.image.BufferedImage(in.getWidth(), in.getHeight(), java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g = rgb.createGraphics();
+        g.setColor(new java.awt.Color(0x2B, 0x30, 0x39)); // card colour behind any transparency
+        g.fillRect(0, 0, rgb.getWidth(), rgb.getHeight());
+        g.drawImage(in, 0, 0, null);
+        g.dispose();
+        Path tmp = avatarFile.resolveSibling(avatarFile.getFileName() + ".tmp");
+        if (javax.imageio.ImageIO.write(rgb, "jpg", tmp.toFile())) Files.move(tmp, avatarFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        else Files.deleteIfExists(tmp);
     }
 
     private static String str(JsonObject o, String k) { return o.has(k) && o.get(k).isJsonPrimitive() ? o.get(k).getAsString() : ""; }
@@ -178,8 +204,9 @@ public final class GoogleAuth {
         if (accessToken != null && System.currentTimeMillis() < accessExpiry) return accessToken;
         String refresh = secrets.load();
         if (refresh == null) throw new AuthException(0, cfg.needsReauth ? "Google needs you to connect again (Settings › Cloud & Sync)." : "Not connected to Google.");
-        String form = "grant_type=refresh_token&refresh_token=" + enc(refresh) + "&client_id=" + enc(cfg.clientId)
-                + (cfg.clientSecret.isBlank() ? "" : "&client_secret=" + enc(cfg.clientSecret));
+        GoogleClient gc = client;
+        String form = "grant_type=refresh_token&refresh_token=" + enc(refresh) + "&client_id=" + enc(gc.clientId())
+                + (gc.clientSecret().isBlank() ? "" : "&client_secret=" + enc(gc.clientSecret()));
         try {
             JsonObject tok = post(tokenEndpoint, form);
             accessToken = tok.get("access_token").getAsString();
@@ -237,7 +264,7 @@ public final class GoogleAuth {
             String code = "";
             try { code = JsonParser.parseString(r.body()).getAsJsonObject().get("error").getAsString(); } catch (Exception ignored) { }
             throw new AuthException(r.statusCode(), "Google sign-in request failed (" + r.statusCode() + (code.isBlank() ? "" : ", " + code) + ")"
-                    + (code.equals("invalid_client") ? " – check the client ID and secret in Settings › Cloud & Sync." : ""));
+                    + (code.equals("invalid_client") ? " – Zyclipra's Google sign-in key was rejected; it may have been deleted in Google Cloud." : ""));
         }
         return JsonParser.parseString(r.body()).getAsJsonObject();
     }

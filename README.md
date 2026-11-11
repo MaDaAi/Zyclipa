@@ -100,10 +100,8 @@ and a reboot, and you should only install drivers you trust):
 Back up clips, recordings and screenshots to *My Drive › Zyclipra*, automatically or one at a time.
 Your PC stays the main library; nothing is removed from it unless you choose that.
 
-1. Make a free Google "OAuth client" (Desktop app) once – step by step in
-   [docs/cloud-and-hosting.md](docs/cloud-and-hosting.md#connecting-google-drive).
-2. *Settings › Cloud & Sync*: paste the client ID and secret, press **Connect Google account**.
-3. Turn on **Automatic upload**, or upload single clips from the clip menu or the editor.
+1. *Settings › Cloud & Sync* › **Sign in with Google**, choose your account, allow access.
+2. Turn on **Automatic upload**, or upload single clips from the clip menu, the editor or the dashboard.
 
 Sign-in is Google's own OAuth 2.0 + PKCE in your browser, with the `drive.file` scope (Zyclipra
 only sees files it made). The token is kept in Windows Credential Manager. Uploads resume after
@@ -134,7 +132,7 @@ See `PROGRESS.md` for the full, current list. The main ones:
 - Capturing game/desktop **sound** in recordings needs a capture device that carries it ("Stereo Mix", or a virtual cable the game outputs to). Direct WASAPI loopback capture is planned.
 - `gdigrab` captures the desktop; exclusive full-screen games may show black – use borderless windowed mode.
 - Dashboard sign-in is a username and password you create in the app; signing in to the dashboard with a Google account isn't offered (Google only allows localhost or public domains as sign-in targets).
-- Google Drive needs a free Google Cloud "OAuth client" that you create once; while its consent screen is in Testing mode Google asks you to reconnect every 7 days.
+- Google sign-in is built from `app/private/google-oauth.json`, which isn't in the repository; builds without it have no Google Drive (see docs/cloud-and-hosting.md). While the OAuth consent screen is in Testing mode, only its test users can sign in and must sign in again every 7 days.
 
 ## Project layout
 ```

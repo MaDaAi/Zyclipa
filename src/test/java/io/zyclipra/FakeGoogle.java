@@ -64,10 +64,15 @@ final class FakeGoogle implements AutoCloseable {
             send(ex, 200, o.toString());
         });
         server.createContext("/avatar.jpg", ex -> {
-            byte[] jpg = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD9};
-            ex.getResponseHeaders().add("Content-Type", "image/jpeg");
-            ex.sendResponseHeaders(200, jpg.length);
-            ex.getResponseBody().write(jpg);
+            // Like Google's default letter avatar: a PNG with transparency.
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(48, 48, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            img.setRGB(10, 10, 0xFF4285F4);
+            java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(img, "png", png);
+            byte[] b = png.toByteArray();
+            ex.getResponseHeaders().add("Content-Type", "image/png");
+            ex.sendResponseHeaders(200, b.length);
+            ex.getResponseBody().write(b);
             ex.close();
         });
         server.createContext("/revoke", ex -> { revoked.incrementAndGet(); send(ex, 200, "{}"); });
