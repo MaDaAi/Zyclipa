@@ -120,6 +120,13 @@ public final class DriveClient {
         return files == null || files.isEmpty() ? Optional.empty() : Optional.of(file(files.get(0).getAsJsonObject()));
     }
 
+    /** A small file's contents as text. */
+    public String readText(String fileId) throws IOException {
+        HttpResponse<String> r = send(req(api + "/drive/v3/files/" + q(fileId) + "?alt=media").GET().build(), HttpResponse.BodyHandlers.ofString());
+        check(r, "read file");
+        return r.body();
+    }
+
     /** Creates (existingId null) or replaces a small file in one request; returns its id. */
     public String putSmall(String existingId, String name, String folderId, Map<String, String> appProperties, String mime, byte[] content) throws IOException {
         JsonObject meta = new JsonObject();

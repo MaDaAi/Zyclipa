@@ -94,7 +94,7 @@ public final class AppContext implements RemoteControl {
                 new SecretStore(paths.root().resolve("dashboard-tls.key")));
         website = new io.zyclipra.remote.WebsiteLink(settings.remote, store::saveNow,
                 new io.zyclipra.cloud.CredentialStore("Zyclipra/website-link", new SecretStore(paths.root().resolve("website-link.key"))),
-                sync, dashboard, dashboardAuth, settings.remote.pcId);
+                sync, dashboard, dashboardAuth, settings.remote.pcId, new io.zyclipra.remote.RtcBridge(dashboard.commands(), this));
         if (enableHotkeys) bindHotkeys();
         library.scanAsync();
         if (settings.mic.enabled) mic.start();

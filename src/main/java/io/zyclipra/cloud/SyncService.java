@@ -585,6 +585,30 @@ public final class SyncService {
         drive.putSmall(existing, "Zyclipra PC link (keep private).json", root, Map.of(LINK_KEY, pcId), "application/json", json);
     }
 
+    public static final String SIGNAL_KEY = "zyclipraPcSignal";
+
+    /** The id of this PC's connection "mailbox" file (made on first use): the website writes offers, the PC answers. */
+    public String ensureSignal(String pcId) throws IOException {
+        var f = drive.findByProperty(SIGNAL_KEY, pcId);
+        if (f.isPresent()) return f.get().id();
+        String root;
+        synchronized (folders) {
+            root = folders.get(cfg.folderName);
+            if (root == null) { root = drive.ensureFolder(cfg.folderName, null); folders.put(cfg.folderName, root); }
+        }
+        return drive.putSmall(null, "Zyclipra PC connect (keep private).json", root, Map.of(SIGNAL_KEY, pcId), "application/json",
+                "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /** modifiedTime of a file, or "" when it's gone. */
+    public String modified(String fileId) throws IOException { return drive.get(fileId).map(DriveClient.RemoteFile::modified).orElse(""); }
+
+    public String readText(String fileId) throws IOException { return drive.readText(fileId); }
+
+    public void writeSignal(String fileId, String json) throws IOException {
+        drive.putSmall(fileId, "Zyclipra PC connect (keep private).json", null, Map.of(), "application/json", json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     /** Removes the link file again (website controls turned off). */
     public void removeLink(String pcId) throws IOException {
         if (!connected()) return;

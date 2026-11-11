@@ -22,6 +22,18 @@
   </properties>
 
   <dependencies>
+        <!-- WebRTC data channel: the website reaches this PC on the home network without certificate warnings. -->
+        <dependency>
+            <groupId>dev.onvoid.webrtc</groupId>
+            <artifactId>webrtc-java</artifactId>
+            <version>0.20.0</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.onvoid.webrtc</groupId>
+            <artifactId>webrtc-java</artifactId>
+            <version>0.20.0</version>
+            <classifier>windows-x86_64</classifier>
+        </dependency>
     <dependency><groupId>org.openjfx</groupId><artifactId>javafx-controls</artifactId><version>${javafx.version}</version></dependency>
     <dependency><groupId>org.openjfx</groupId><artifactId>javafx-media</artifactId><version>${javafx.version}</version></dependency>
     <dependency><groupId>net.java.dev.jna</groupId><artifactId>jna</artifactId><version>${jna.version}</version></dependency>

@@ -41,9 +41,13 @@ public final class WebsiteLink {
         return t;
     });
     private volatile String published = "";
+    private final RtcBridge rtc;
+    private volatile String signalId = "", signalSeen = "", lastOffer = "";
     private volatile String problem = "";
 
-    public WebsiteLink(Settings.Remote cfg, Runnable save, Secrets keyStore, SyncService sync, DashboardServer dashboard, DashboardAuth auth, String pcId) {
+    public WebsiteLink(Settings.Remote cfg, Runnable save, Secrets keyStore, SyncService sync, DashboardServer dashboard, DashboardAuth auth, String pcId,
+                       RtcBridge rtc) {
+        this.rtc = rtc;
         this.cfg = cfg;
         this.save = save;
         this.keyStore = keyStore;
@@ -53,6 +57,8 @@ public final class WebsiteLink {
         this.pcId = pcId;
         // Addresses can change (new Wi-Fi, DHCP): re-check now and then and rewrite the file only if they did.
         worker.scheduleWithFixedDelay(this::publishIfChanged, 5, 600, TimeUnit.SECONDS);
+        // Connection requests from the website arrive in the mailbox file; a cheap metadata check every 2 s.
+        worker.scheduleWithFixedDelay(this::checkSignal, 7, 2, TimeUnit.SECONDS);
     }
 
     public boolean on() { return cfg.website && !cfg.webKeyHash.isBlank(); }
@@ -111,13 +117,17 @@ public final class WebsiteLink {
         for (DashboardServer.Url u : addresses) urls.add(u.url());
         o.add("urls", urls);
         o.addProperty("origin", cfg.webOrigin);
+        if (!signalId.isEmpty()) o.addProperty("signal", signalId);
         return o.toString();
     }
 
     private void publishIfChanged() {
         try {
-            String json = linkJson();
-            if (json == null || json.equals(published) || !sync.connected()) return;
+            String json;
+            if (!on() || !sync.connected() || !dashboard.running()) return;
+            if (signalId.isEmpty()) signalId = sync.ensureSignal(pcId);
+            json = linkJson();
+            if (json == null || json.equals(published)) return;
             sync.publishLink(pcId, json.getBytes(StandardCharsets.UTF_8));
             published = json;
             problem = "";
@@ -128,5 +138,37 @@ public final class WebsiteLink {
         }
     }
 
-    public void shutdown() { worker.shutdownNow(); }
+    /** Answers a new WebRTC offer the website left in the mailbox (only with this PC's current link key). */
+    private void checkSignal() {
+        try {
+            if (signalId.isEmpty() || !on() || !sync.connected()) return;
+            String m = sync.modified(signalId);
+            if (m.isEmpty()) { signalId = ""; published = ""; return; }      // deleted: made again on next publish
+            if (m.equals(signalSeen)) return;
+            signalSeen = m;
+            JsonObject req = com.google.gson.JsonParser.parseString(sync.readText(signalId)).getAsJsonObject();
+            if (!req.has("offer") || !req.has("id") || !req.has("key")) return;
+            String id = req.get("id").getAsString();
+            String key = keyStore.load();
+            long age = System.currentTimeMillis() - (req.has("t") ? req.get("t").getAsLong() : 0);
+            if (id.equals(lastOffer) || !id.matches("[A-Za-z0-9_-]{8,64}") || age > 120_000 || age < -120_000) return;
+            if (key == null || !java.security.MessageDigest.isEqual(key.getBytes(StandardCharsets.UTF_8), req.get("key").getAsString().getBytes(StandardCharsets.UTF_8))) {
+                LOG.warning("website link: ignored a connection request with the wrong key");
+                return;
+            }
+            lastOffer = id;
+            String answer = rtc.answer(id, req.get("offer").getAsString());
+            JsonObject out = new JsonObject();
+            out.addProperty("v", 1);
+            out.addProperty("id", id);
+            out.addProperty("answer", answer);
+            sync.writeSignal(signalId, out.toString());
+            signalSeen = sync.modified(signalId);
+            LOG.info("website link: answered connection request " + id);
+        } catch (Exception e) {
+            LOG.info("website link: " + e.getMessage());
+        }
+    }
+
+    public void shutdown() { worker.shutdownNow(); rtc.closeAll(); }
 }

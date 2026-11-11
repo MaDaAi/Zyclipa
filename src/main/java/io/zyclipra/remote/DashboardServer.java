@@ -78,6 +78,8 @@ public final class DashboardServer {
 
     public synchronized boolean running() { return server != null; }
     public String fingerprint() { return fingerprint; }
+    /** The one command runner, shared with the WebRTC link so duplicate ids and rate limits apply across both. */
+    public Commands commands() { return commands; }
     /** The dashboard's own certificate (public part only), for a reverse proxy that should trust it. */
     public String certificatePem() { return certificatePem; }
     public String instanceId() { return instanceId; }
