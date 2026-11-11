@@ -221,6 +221,7 @@ public final class DashboardServer {
                 send(ex, 403, json("error", "This device isn't allowed by Zyclipra's hosting settings."));
                 return;
             }
+            if (flooding(remote)) { send(ex, 429, json("error", "Too many requests – slow down.")); return; }
             var h = ex.getResponseHeaders();
             h.add("X-Content-Type-Options", "nosniff");
             h.add("X-Frame-Options", "DENY");
@@ -299,6 +300,19 @@ public final class DashboardServer {
             }
         }
         return a.getHostAddress();
+    }
+
+    private final java.util.Map<String, long[]> hits = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Flood guard: more than 3000 requests a minute from one address (streaming a clip needs ~1500). */
+    private boolean flooding(InetAddress a) {
+        if (hits.size() > 10_000) hits.clear();
+        long minute = System.currentTimeMillis() / 60_000;
+        long[] h = hits.computeIfAbsent(a.getHostAddress(), k -> new long[2]);
+        synchronized (h) {
+            if (h[0] != minute) { h[0] = minute; h[1] = 0; }
+            return ++h[1] > 3000;
+        }
     }
 
     /** A request from the hosted website (exact origin match), allowed only while "website" is on. */

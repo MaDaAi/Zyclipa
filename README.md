@@ -1,6 +1,6 @@
 # Zyclipra
 
-**Free, open-source (MIT) gaming utility for Windows**: screen and game recording, instant
+**Free, MIT-licensed gaming utility for Windows**: screen and game recording, instant
 replay, a clip library, a multi-channel audio mixer with per-app control, a 9-band equalizer,
 microphone effects, a soundboard, optional Google Drive clip sync, and an optional remote
 dashboard for your phone.

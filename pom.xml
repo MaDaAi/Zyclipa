@@ -17,7 +17,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <javafx.version>23.0.2</javafx.version>
-    <jna.version>5.15.0</jna.version>
+    <jna.version>5.19.1</jna.version>
     <main.class>io.zyclipra.Launcher</main.class>
   </properties>
 
@@ -38,8 +38,8 @@
     <dependency><groupId>org.openjfx</groupId><artifactId>javafx-media</artifactId><version>${javafx.version}</version></dependency>
     <dependency><groupId>net.java.dev.jna</groupId><artifactId>jna</artifactId><version>${jna.version}</version></dependency>
     <dependency><groupId>net.java.dev.jna</groupId><artifactId>jna-platform</artifactId><version>${jna.version}</version></dependency>
-    <dependency><groupId>com.google.code.gson</groupId><artifactId>gson</artifactId><version>2.11.0</version></dependency>
-    <dependency><groupId>org.bouncycastle</groupId><artifactId>bcpkix-jdk18on</artifactId><version>1.79</version></dependency>
+    <dependency><groupId>com.google.code.gson</groupId><artifactId>gson</artifactId><version>2.15.0</version></dependency>
+    <dependency><groupId>org.bouncycastle</groupId><artifactId>bcpkix-jdk18on</artifactId><version>1.86</version></dependency>
     <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.11.3</version><scope>test</scope></dependency>
   </dependencies>
 

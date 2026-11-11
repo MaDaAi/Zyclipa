@@ -64,7 +64,8 @@ public final class DashboardAuth {
     public String username() { return cfg.username; }
 
     /** Shortest allowed password: longer when the dashboard is reachable from the internet. */
-    public int minPasswordLength() { return "public".equals(cfg.mode) ? 12 : 8; }
+    /** Longer when the dashboard can be reached from the internet (public mode or "outside my home network"). */
+    public int minPasswordLength() { return "public".equals(cfg.mode) || cfg.vpn ? 12 : 8; }
 
     public static String checkUsername(String u) {
         if (u == null || !USERNAME.matcher(u).matches()) throw new IllegalArgumentException("Use 3–32 letters, digits, dots, dashes or underscores for the username.");
