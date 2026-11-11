@@ -692,6 +692,35 @@ public final class SettingsView implements View {
                 "small", "muted"), Ui.grow(), Ui.button("Get Tailscale", null, () -> DriveSyncBox.browse("https://tailscale.com/download"), "outline")));
         access.getChildren().add(Ui.label("Any other address is refused. Zyclipra never opens router ports, never uses UPnP or NAT-PMP and never changes the firewall.", "small", "muted"));
 
+        // --- the hosted website: PC controls when on the same network
+        var link = ctx.website;
+        String siteUrl = "https://madaai.github.io/zyclipra-dashboard/";
+        VBox webBox = Ui.section("Zyclipra website", null);
+        ToggleButton webSw = Ui.toggleSwitch(link.on(), "Website controls", v -> {
+            try { if (v) link.enable(); else link.disable(); }
+            catch (Exception e) { win.toast("Couldn't turn on website controls: " + e.getMessage(), true); }
+            open("Hosting");
+        });
+        String webState;
+        if (!link.on()) webState = "Off.";
+        else if (!ctx.sync.connected()) webState = "Connect Google Drive (Cloud & Sync) so the website can find this PC.";
+        else if (!link.problem().isBlank()) webState = link.problem();
+        else webState = link.published() ? "On – the website can find this PC on your network." : "On – saving the link to Google Drive…";
+        webBox.getChildren().addAll(
+                Ui.settingRow("Soundboard and clipping from the website",
+                        "Sign in to the Zyclipra website with your Google account and, when you're on the same Wi-Fi as this PC, "
+                                + "it connects here automatically. It finds this PC through a private file in your Google Drive, "
+                                + "and this turns on “Devices on my home network”. Nothing is reachable from the internet.", webSw),
+                Ui.label(webState, "small", link.on() && link.problem().isBlank() ? "ok-text" : "muted"));
+        if (link.on()) webBox.getChildren().add(Ui.label("Certificate fingerprint (your browser may show it the first time): "
+                + server.fingerprint(), "small", "muted"));
+        webBox.getChildren().add(Ui.row(10,
+                Ui.button("Open the website", null, () -> DriveSyncBox.browse(siteUrl), "outline"),
+                Ui.button("Reset website link", null, () -> {
+                    try { link.reset(); win.toast("The website is signed out everywhere. Reload it to reconnect.", false); }
+                    catch (Exception e) { win.toast("Reset failed: " + e.getMessage(), true); }
+                }, "outline")));
+
         // --- advanced: public
         VBox adv = new VBox(10);
         TextField url = new TextField(r.publicUrl);
@@ -755,7 +784,7 @@ public final class SettingsView implements View {
                 + "Use Private VPN for access away from home.", "small", "muted"));
 
         return pageBox("Hosting", "The dashboard lets you clip, record and manage your clips from your phone or another PC. It runs on this PC and is off until you start it.",
-                status, spacer(14), security, spacer(14), access, spacer(14), advanced, spacer(14), external);
+                status, spacer(14), security, spacer(14), access, spacer(14), webBox, spacer(14), advanced, spacer(14), external);
     }
 
     // ---------------- About ----------------

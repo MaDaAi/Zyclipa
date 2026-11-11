@@ -228,7 +228,20 @@ public final class DashboardServer {
             h.add("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self'; script-src 'self'; "
                     + "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
             String path = ex.getRequestURI().getPath();
-            if (path.startsWith("/api/")) api(ex, path.substring(5));
+            boolean web = fromWebsite(ex);
+            if (web) { h.add("Access-Control-Allow-Origin", cfg.webOrigin); h.add("Vary", "Origin"); }
+            if ("OPTIONS".equals(ex.getRequestMethod())) {
+                // CORS preflight from the hosted website only. Private-Network header: Chrome asks before a public
+                // site may reach a device on the home network, and the device has to agree too.
+                if (!web || !path.startsWith("/api/")) { send(ex, 403, json("error", "not allowed")); return; }
+                h.add("Access-Control-Allow-Methods", "GET, POST");
+                h.add("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Command-Id");
+                h.add("Access-Control-Allow-Private-Network", "true");
+                h.add("Access-Control-Max-Age", "600");
+                ex.sendResponseHeaders(204, -1);
+                return;
+            }
+            if (path.startsWith("/api/")) { if (web) webApi(ex, path.substring(5)); else api(ex, path.substring(5)); }
             else asset(ex, path);
         } catch (SecurityException e) {
             send(ex, 403, json("error", e.getMessage()));
@@ -283,6 +296,54 @@ public final class DashboardServer {
             }
         }
         return a.getHostAddress();
+    }
+
+    /** A request from the hosted website (exact origin match), allowed only while "website" is on. */
+    private boolean fromWebsite(HttpExchange ex) {
+        String origin = ex.getRequestHeaders().getFirst("Origin");
+        return cfg.website && !cfg.webKeyHash.isBlank() && origin != null && origin.equals(cfg.webOrigin);
+    }
+
+    /**
+     * The hosted website's API: it signs in with the link key it read from the owner's Google Drive and then
+     * sends a bearer token (never a cookie, so other sites can't ride on it). It can only use the PC controls:
+     * status, soundboard and the remote commands – not the account, sessions or settings.
+     */
+    private void webApi(HttpExchange ex, String route) throws IOException {
+        String method = ex.getRequestMethod();
+        ex.getResponseHeaders().add("Cache-Control", "no-store");
+        boolean post = "POST".equals(method);
+        if (!post && !"GET".equals(method)) { send(ex, 405, json("error", "method")); return; }
+        JsonObject body = post ? readBody(ex) : new JsonObject();
+        if (route.equals("web/session") && post) {
+            String token = auth.webLogin(clientAddress(ex), ex.getRequestHeaders().getFirst("User-Agent"), opt(body, "key"));
+            if (token == null) {
+                send(ex, auth.lastResult() == DashboardAuth.Result.LOCKED ? 429 : 401,
+                        json("error", auth.lastResult() == DashboardAuth.Result.LOCKED ? "Too many attempts – wait a few minutes."
+                                : "This PC's website link has changed. Reload the page."));
+                return;
+            }
+            JsonObject o = new JsonObject();
+            o.addProperty("token", token);
+            o.addProperty("pc", java.util.Objects.requireNonNullElse(System.getenv("COMPUTERNAME"), "PC"));
+            send(ex, 200, o);
+            return;
+        }
+        String auth0 = ex.getRequestHeaders().getFirst("Authorization");
+        String token = auth0 != null && auth0.startsWith("Bearer ") ? auth0.substring(7).trim() : null;
+        String sessionId = auth.isWeb(token) ? auth.sessionId(token) : null;
+        if (sessionId == null) { send(ex, 401, json("error", "Please reconnect.")); return; }
+        if (post && Commands.isCommand(route) && !route.startsWith("cloud/")) {
+            Commands.Reply r = commands.run(sessionId, ex.getRequestHeaders().getFirst("X-Command-Id"), route, body);
+            send(ex, r.status(), r.body());
+            return;
+        }
+        switch (method + " " + route) {
+            case "GET status" -> send(ex, 200, control.status());
+            case "GET sounds" -> send(ex, 200, control.sounds());
+            case "POST web/logout" -> { auth.logout(token); send(ex, 200, json("ok", "true")); }
+            default -> send(ex, 403, json("error", "Use the dashboard on the PC for that."));
+        }
     }
 
     private void api(HttpExchange ex, String route) throws IOException {

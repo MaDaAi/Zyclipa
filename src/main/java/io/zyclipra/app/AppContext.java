@@ -53,6 +53,7 @@ public final class AppContext implements RemoteControl {
     public final SyncService sync;
     public final DashboardAuth dashboardAuth;
     public final DashboardServer dashboard;
+    public final io.zyclipra.remote.WebsiteLink website;
     private final Map<String, String> hotkeyErrors = new LinkedHashMap<>();
 
     public AppContext(Path dataDir, boolean enableHotkeys) {
@@ -91,6 +92,9 @@ public final class AppContext implements RemoteControl {
         dashboardAuth = new DashboardAuth(settings.remote, store::saveNow);
         dashboard = new DashboardServer(settings.remote, dashboardAuth, this, paths.keystore(),
                 new SecretStore(paths.root().resolve("dashboard-tls.key")));
+        website = new io.zyclipra.remote.WebsiteLink(settings.remote, store::saveNow,
+                new io.zyclipra.cloud.CredentialStore("Zyclipra/website-link", new SecretStore(paths.root().resolve("website-link.key"))),
+                sync, dashboard, dashboardAuth, settings.remote.pcId);
         if (enableHotkeys) bindHotkeys();
         library.scanAsync();
         if (settings.mic.enabled) mic.start();
@@ -160,6 +164,7 @@ public final class AppContext implements RemoteControl {
         soundboard.stopAll();
         mic.stop();
         dashboard.stop();
+        website.shutdown();
         hotkeys.close();
         mixer.close();
         sync.close();

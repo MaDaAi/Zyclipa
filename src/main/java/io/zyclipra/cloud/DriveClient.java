@@ -110,6 +110,41 @@ public final class DriveClient {
         return Optional.of(file(files.get(0).getAsJsonObject()));
     }
 
+    /** The first non-trashed file Zyclipra made with this app property. */
+    public Optional<RemoteFile> findByProperty(String key, String value) throws IOException {
+        String query = "appProperties has { key=" + lit(key) + " and value=" + lit(value) + " } and trashed=false";
+        HttpResponse<String> r = send(req(api + "/drive/v3/files?pageSize=10&fields=files(" + FILE_FIELDS + ")&q=" + q(query)).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        check(r, "look up file");
+        JsonArray files = JsonParser.parseString(r.body()).getAsJsonObject().getAsJsonArray("files");
+        return files == null || files.isEmpty() ? Optional.empty() : Optional.of(file(files.get(0).getAsJsonObject()));
+    }
+
+    /** Creates (existingId null) or replaces a small file in one request; returns its id. */
+    public String putSmall(String existingId, String name, String folderId, Map<String, String> appProperties, String mime, byte[] content) throws IOException {
+        JsonObject meta = new JsonObject();
+        meta.addProperty("name", name);
+        if (existingId == null) {
+            JsonArray parents = new JsonArray();
+            parents.add(folderId);
+            meta.add("parents", parents);
+        }
+        JsonObject ap = new JsonObject();
+        appProperties.forEach(ap::addProperty);
+        meta.add("appProperties", ap);
+        String boundary = "zyclipra" + System.nanoTime();
+        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+        b.writeBytes(("--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + meta + "\r\n--" + boundary
+                + "\r\nContent-Type: " + mime + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        b.writeBytes(content);
+        b.writeBytes(("\r\n--" + boundary + "--").getBytes(StandardCharsets.UTF_8));
+        String url = api + "/upload/drive/v3/files" + (existingId == null ? "" : "/" + q(existingId)) + "?uploadType=multipart&fields=id";
+        HttpResponse<String> r = send(req(url).header("Content-Type", "multipart/related; boundary=" + boundary)
+                .method(existingId == null ? "POST" : "PATCH", HttpRequest.BodyPublishers.ofByteArray(b.toByteArray())).build(), HttpResponse.BodyHandlers.ofString());
+        check(r, "save file");
+        return JsonParser.parseString(r.body()).getAsJsonObject().get("id").getAsString();
+    }
+
     /** The file's details, or empty when it was deleted or moved to the bin. */
     public Optional<RemoteFile> get(String fileId) throws IOException {
         HttpResponse<String> r = send(req(api + "/drive/v3/files/" + q(fileId) + "?fields=" + FILE_FIELDS).GET().build(), HttpResponse.BodyHandlers.ofString());

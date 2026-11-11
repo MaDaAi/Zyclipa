@@ -571,6 +571,27 @@ public final class SyncService {
         return out;
     }
 
+    public static final String LINK_KEY = "zyclipraPcLink";
+
+    /** Writes (or replaces) the small "how to reach this PC" file the website reads, in the Zyclipra folder. */
+    public void publishLink(String pcId, byte[] json) throws IOException {
+        if (!connected()) return;
+        String root;
+        synchronized (folders) {
+            root = folders.get(cfg.folderName);
+            if (root == null) { root = drive.ensureFolder(cfg.folderName, null); folders.put(cfg.folderName, root); }
+        }
+        String existing = drive.findByProperty(LINK_KEY, pcId).map(DriveClient.RemoteFile::id).orElse(null);
+        drive.putSmall(existing, "Zyclipra PC link (keep private).json", root, Map.of(LINK_KEY, pcId), "application/json", json);
+    }
+
+    /** Removes the link file again (website controls turned off). */
+    public void removeLink(String pcId) throws IOException {
+        if (!connected()) return;
+        var f = drive.findByProperty(LINK_KEY, pcId);
+        if (f.isPresent()) drive.delete(f.get().id());
+    }
+
     public String folderUrl() {
         String id = folders.get(cfg.folderName);
         return id == null ? "https://drive.google.com/drive/my-drive" : "https://drive.google.com/drive/folders/" + id;

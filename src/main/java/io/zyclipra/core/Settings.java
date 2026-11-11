@@ -206,6 +206,13 @@ public final class Settings {
         public String username = "";
         /** Argon2id hash in PHC format ($argon2id$v=19$m=…,t=…,p=…$salt$hash); never the password itself. */
         public String passwordHash = "";
+        /** The hosted website (GitHub Pages) may use this PC's controls on the home network. */
+        public boolean website = false;
+        public String webOrigin = "https://madaai.github.io";
+        /** SHA-256 of the link key the website reads from the owner's Google Drive; the key itself isn't stored here. */
+        public String webKeyHash = "";
+        /** Random id of this install, so the website can tell several PCs apart. */
+        public String pcId = "";
         public String pairingCodeHash = "";  // legacy (pairing-code login), no longer used
         public String pairingSalt = "";      // legacy
     }
@@ -328,6 +335,9 @@ public final class Settings {
         if (!"local".equals(remote.mode) && !"public".equals(remote.mode)) remote.mode = "local";
         if (remote.publicUrl == null || !remote.publicUrl.startsWith("https://")) { remote.publicUrl = ""; if ("public".equals(remote.mode)) remote.mode = "local"; }
         if (remote.username == null) remote.username = "";
+        if (remote.webOrigin == null || !remote.webOrigin.matches("https://[a-z0-9.-]+(:[0-9]{1,5})?")) remote.webOrigin = "https://madaai.github.io";
+        if (remote.pcId == null || !remote.pcId.matches("[A-Za-z0-9_-]{8,40}")) remote.pcId = io.zyclipra.cloud.Pkce.random(12);
+        if (remote.webKeyHash == null || !remote.webKeyHash.matches("[0-9a-f]{64}")) { remote.webKeyHash = ""; remote.website = false; }
         if (remote.passwordHash == null || !remote.passwordHash.startsWith("$argon2id$")) remote.passwordHash = "";
         if (remote.pairingSalt == null) remote.pairingSalt = "";
         return this;

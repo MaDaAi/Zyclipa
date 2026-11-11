@@ -35,6 +35,7 @@ public final class DashboardAuth {
         final long created;
         final String address, agent;
         volatile long lastSeen;
+        boolean web;
         Session(String id, long created, String address, String agent) { this.id = id; this.created = created; this.lastSeen = created; this.address = address; this.agent = agent; }
     }
 
@@ -98,21 +99,59 @@ public final class DashboardAuth {
         if ((until != null && now < until) || now < globalLockUntil) { last = Result.LOCKED; return null; }
         boolean nameOk = username != null && MessageDigest.isEqual(username.getBytes(StandardCharsets.UTF_8), cfg.username.getBytes(StandardCharsets.UTF_8));
         boolean passOk = PasswordHasher.verify(password == null ? new char[0] : password.toCharArray(), nameOk ? cfg.passwordHash : DUMMY);
-        if (!(nameOk && passOk)) {
-            int[] f = failures.computeIfAbsent(address, k -> new int[1]);
-            f[0]++;
-            if (f[0] >= 5) lockedUntil.put(address, now + Math.min(3600_000L, 30_000L << Math.min(7, f[0] - 5)));
-            recentFailures.add(now);
-            recentFailures.removeIf(t -> t < now - 600_000L);
-            if (recentFailures.size() >= 50) globalLockUntil = now + 300_000L;
-            last = Result.WRONG;
-            return null;
-        }
+        if (!(nameOk && passOk)) { fail(address, now); return null; }
+        return newSession(address, agent, now, false);
+    }
+
+    /**
+     * Sign-in for the hosted website: it proves it read this PC's link key from the owner's Google Drive.
+     * Only the key's SHA-256 is kept here; failures count towards the same lock-outs as passwords.
+     */
+    public synchronized String webLogin(String address, String agent, String key) {
+        long now = clock.getAsLong();
+        if (!configured() || cfg.webKeyHash.isBlank()) { last = Result.NOT_SET_UP; return null; }
+        Long until = lockedUntil.get(address);
+        if ((until != null && now < until) || now < globalLockUntil) { last = Result.LOCKED; return null; }
+        boolean ok = key != null && key.length() <= 100
+                && MessageDigest.isEqual(sha256(key).getBytes(StandardCharsets.UTF_8), cfg.webKeyHash.getBytes(StandardCharsets.UTF_8));
+        if (!ok) { fail(address, now); return null; }
+        return newSession(address, "Website · " + (agent == null ? "" : agent), now, true);
+    }
+
+    /** Whether the session behind this token was opened by the hosted website. */
+    public boolean isWeb(String token) {
+        Session s = token == null ? null : sessions.get(token);
+        return s != null && s.web;
+    }
+
+    /** Signs out every website session (used when the link key is reset). */
+    public void revokeWeb() { sessions.values().removeIf(s -> s.web); }
+
+    public static String sha256(String s) {
+        try {
+            return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) { throw new IllegalStateException(e); }
+    }
+
+    private void fail(String address, long now) {
+        int[] f = failures.computeIfAbsent(address, k -> new int[1]);
+        f[0]++;
+        if (f[0] >= 5) lockedUntil.put(address, now + Math.min(3600_000L, 30_000L << Math.min(7, f[0] - 5)));
+        recentFailures.add(now);
+        recentFailures.removeIf(t -> t < now - 600_000L);
+        if (recentFailures.size() >= 50) globalLockUntil = now + 300_000L;
+        last = Result.WRONG;
+    }
+
+    private String newSession(String address, String agent, long now, boolean web) {
         failures.remove(address);
         lockedUntil.remove(address);
         String token = Pkce.random(32);
-        String agentShort = agent == null ? "" : agent.replaceAll("[^\\x20-\\x7E]", "").substring(0, Math.min(120, agent.length()));
-        sessions.put(token, new Session(idOf(token), now, address, agentShort));
+        String agentShort = agent == null ? "" : agent.replaceAll("[^\\x20-\\x7E]", "");
+        agentShort = agentShort.substring(0, Math.min(120, agentShort.length()));
+        Session s = new Session(idOf(token), now, address, agentShort);
+        s.web = web;
+        sessions.put(token, s);
         last = Result.OK;
         return token;
     }
