@@ -123,7 +123,7 @@ public final class DashboardServer {
         s.setExecutor(pool);
         s.start();
         server = s;
-        LOG.info("Dashboard listening on " + bind.getHostAddress() + ":" + port() + " (mode " + cfg.mode + (cfg.lan ? ", home network" : "") + (cfg.vpn ? ", VPN" : "") + ")");
+        LOG.info("Dashboard listening on " + bind.getHostAddress() + ":" + port() + " (mode " + cfg.mode + (cfg.lan ? ", home network" : "") + (cfg.vpn ? ", outside access" : "") + ")");
     }
 
     public synchronized void stop() {
@@ -164,7 +164,7 @@ public final class DashboardServer {
                 for (InetAddress a : Collections.list(ni.getInetAddresses())) {
                     if (!(a instanceof java.net.Inet4Address)) continue;
                     if (cfg.lan && a.isSiteLocalAddress()) out.add(new Url("Home network", "https://" + a.getHostAddress() + ":" + port()));
-                    else if (cfg.vpn && vpnAddress(a)) out.add(new Url("Tailscale (away from home)", "https://" + a.getHostAddress() + ":" + port()));
+                    else if (cfg.vpn && vpnAddress(a)) out.add(new Url("VPN", "https://" + a.getHostAddress() + ":" + port()));
                 }
             }
         } catch (IOException ignored) { }
@@ -209,7 +209,8 @@ public final class DashboardServer {
         if (a == null) return false;
         if (a.isLoopbackAddress()) return true;          // this PC, or the owner's reverse proxy on this PC
         if ("public".equals(cfg.mode)) return false;      // public mode serves only through the local proxy
-        return (cfg.lan && lanAddress(a)) || (cfg.vpn && vpnAddress(a));
+        // "Outside my home network" (cfg.vpn): any address – the owner set up port forwarding or a VPN themselves.
+        return cfg.vpn || (cfg.lan && lanAddress(a));
     }
 
     private void handle(HttpExchange ex) throws IOException {

@@ -244,9 +244,10 @@ class RemoteTest {
         r.vpn = true;
         assertTrue(DashboardServer.allowed(ts, r));
         assertTrue(DashboardServer.allowed(ts6, r));
-        assertFalse(DashboardServer.allowed(lan, r), "VPN doesn't include the home network");
+        assertTrue(DashboardServer.allowed(pub, r), "outside access: the owner's own port forwarding or VPN");
+        r.vpn = false;
         r.lan = true;
-        assertFalse(DashboardServer.allowed(pub, r), "the open internet is never allowed directly");
+        assertFalse(DashboardServer.allowed(pub, r), "the home network switch never lets the internet in");
         r.mode = "public";
         assertTrue(DashboardServer.allowed(loop, r), "public mode: only the owner's reverse proxy on this PC");
         assertFalse(DashboardServer.allowed(lan, r));

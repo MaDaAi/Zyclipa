@@ -677,20 +677,18 @@ public final class SettingsView implements View {
             if (server.running()) { try { server.restart(); } catch (Exception e) { win.toast("Restart failed: " + e.getMessage(), true); } }
             open("Hosting");
         };
-        List<String> ts = io.zyclipra.remote.DashboardServer.tailscaleAddresses();
         ToggleButton lanSw = sw(r.lan, "Home network", v -> { r.lan = v; restartIfRunning.run(); });
-        ToggleButton vpnSw = sw(r.vpn, "Private VPN", v -> { r.vpn = v; restartIfRunning.run(); });
+        ToggleButton vpnSw = sw(r.vpn, "Outside my home network", v -> { r.vpn = v; restartIfRunning.run(); });
         lanSw.setDisable(pub);
         vpnSw.setDisable(pub);
         access.getChildren().addAll(
                 Ui.settingRow("This PC", "Always allowed (https://127.0.0.1).", Ui.label("On", "small", "ok-text")),
                 Ui.settingRow("Devices on my home network", "Phones and PCs on the same Wi-Fi or router. Off by default.", lanSw),
-                Ui.settingRow("Private VPN – Tailscale (recommended for away from home)",
-                        (ts.isEmpty() ? "Tailscale isn't running on this PC. " : "Tailscale found: " + String.join(", ", ts) + ". ")
-                                + "Your phone and PC join one private network; the dashboard never faces the internet.", vpnSw));
-        if (ts.isEmpty()) access.getChildren().add(Ui.row(10, Ui.label("1. Install Tailscale on this PC and your phone  2. Sign in to the same account on both  3. Turn on the switch above",
-                "small", "muted"), Ui.grow(), Ui.button("Get Tailscale", null, () -> DriveSyncBox.browse("https://tailscale.com/download"), "outline")));
-        access.getChildren().add(Ui.label("Any other address is refused. Zyclipra never opens router ports, never uses UPnP or NAT-PMP and never changes the firewall.", "small", "muted"));
+                Ui.settingRow("Outside my home network",
+                        "For using the dashboard away from home. Set up port forwarding on your router or a VPN yourself – "
+                        + "Zyclipra doesn't do it for you. This lets any address that reaches this PC try to sign in, so use a strong password. "
+                        + "Whatever you do with this is your own responsibility.", vpnSw));
+        access.getChildren().add(Ui.label("Zyclipra never opens router ports, never uses UPnP or NAT-PMP and never changes the firewall.", "small", "muted"));
 
         // --- the hosted website: PC controls when on the same network
         var link = ctx.website;
@@ -765,26 +763,22 @@ public final class SettingsView implements View {
         }, "outline");
         adv.getChildren().addAll(
                 Ui.label("⚠ Not recommended. This puts your recording controls and clips on the internet, where anyone can try to sign in. "
-                        + "Private VPN (above) gives the same away-from-home access without that risk. Only continue if you know how to run a server.", "warn-text"),
+                        + "Only continue if you know how to run a server.", "warn-text"),
                 Ui.label("You do all of this yourself – Zyclipra never changes your router, firewall or DNS:\n"
                         + "1.  Get a domain name that points to your home IP address (dynamic DNS is fine).\n"
                         + "2.  Run an HTTPS reverse proxy on this PC (for example Caddy) with a real certificate, forwarding to https://localhost:" + r.port + ".\n"
                         + "    Have it trust this dashboard's own certificate (save it with the button below) and keep the Host header.\n"
                         + "3.  Forward port 443 on your router to this PC and allow it in Windows Firewall.\n"
                         + "4.  Enter the address and your dashboard password here. Zyclipra checks that the address reaches this app with a trusted certificate before turning it on.\n"
-                        + "While public access is on, the dashboard only listens on this PC (for the proxy), and home-network/VPN access are switched off.", "small", "muted"),
+                        + "While public access is on, the dashboard only listens on this PC (for the proxy), and home-network/outside access are switched off.", "small", "muted"),
                 advState, Ui.row(12, Ui.field("Public address", url), Ui.field("Dashboard password", confirmPw)), advErr, Ui.row(10, turnOn, turnOff, Ui.grow(), export));
         javafx.scene.control.TitledPane advanced = new javafx.scene.control.TitledPane("Advanced: public internet through your own reverse proxy", adv);
         advanced.setExpanded(pub);
         advanced.getStyleClass().add("plain-titled");
 
-        VBox external = Ui.section("External hosting", null);
-        external.getChildren().add(Ui.label("Hosting the dashboard on a website (instead of on this PC) isn't available in this version. It would need a secure, "
-                + "authenticated relay between that website and this PC, and Zyclipra won't expose its recording controls without one. "
-                + "Use Private VPN for access away from home.", "small", "muted"));
 
         return pageBox("Hosting", "The dashboard lets you clip, record and manage your clips from your phone or another PC. It runs on this PC and is off until you start it.",
-                status, spacer(14), security, spacer(14), access, spacer(14), webBox, spacer(14), advanced, spacer(14), external);
+                status, spacer(14), security, spacer(14), access, spacer(14), webBox, spacer(14), advanced);
     }
 
     // ---------------- About ----------------
