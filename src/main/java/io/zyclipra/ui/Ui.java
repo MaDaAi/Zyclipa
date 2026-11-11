@@ -164,6 +164,50 @@ public final class Ui {
 
     public static void tip(Node n, String text) { Tooltip.install(n, new Tooltip(text)); }
 
+    /**
+     * A 0–300 % gain slider (value in percent) with marks at 0, 100, 200 and 300 %, a typeable percentage, and an
+     * orange fill for the amplified part above 100 %. {@code onChange} receives the gain as 0..3.
+     */
+    public static VBox gainSlider(double gain, String what, java.util.function.DoubleConsumer onChange) {
+        Slider s = new Slider(0, 300, Math.round(gain * 100));
+        s.getStyleClass().add("gain-slider");
+        s.setAccessibleText(what + " volume, 0 to 300 percent");
+        s.setMajorTickUnit(100);
+        s.setMinorTickCount(1);
+        s.setShowTickMarks(true);
+        s.setShowTickLabels(true);
+        s.setSnapToTicks(false);
+        s.setBlockIncrement(5);
+        s.setLabelFormatter(new javafx.util.StringConverter<>() {
+            @Override public String toString(Double d) { return Math.round(d) + "%"; }
+            @Override public Double fromString(String t) { return Double.valueOf(t.replace("%", "")); }
+        });
+        HBox.setHgrow(s, Priority.ALWAYS);
+        s.setMaxWidth(Double.MAX_VALUE);
+        Label pct = label(Math.round(s.getValue()) + "%", "small");
+        pct.setWrapText(false);
+        pct.setMinWidth(44);
+        Runnable paint = () -> {
+            double v = s.getValue() / 3.0;            // 0..100 % of the track
+            String accent = color("-accent"), amp = "#F5A524";
+            String g = v <= 33.34
+                    ? String.format(Locale.ROOT, "linear-gradient(to right, %s 0%%, %s %.2f%%, #1B1F25 %.2f%%, #1B1F25 100%%)", accent, accent, v, v)
+                    : String.format(Locale.ROOT, "linear-gradient(to right, %s 0%%, %s 33.33%%, %s 33.33%%, %s %.2f%%, #1B1F25 %.2f%%, #1B1F25 100%%)", accent, accent, amp, amp, v, v);
+            s.setStyle("-slider-fill: " + g + ";");
+            pct.setText(Math.round(s.getValue()) + "%");
+            pct.getStyleClass().setAll("label", "small", s.getValue() > 100.5 ? "warn-text" : "muted");
+        };
+        s.valueProperty().addListener((o, a, b) -> { paint.run(); onChange.accept(Math.round(b.doubleValue()) / 100.0); });
+        // Rest briefly on 100 % (the original level) while dragging past it.
+        s.valueChangingProperty().addListener((o, a, b) -> { if (!b && Math.abs(s.getValue() - 100) < 4) s.setValue(100); });
+        paint.run();
+        Node typed = editable(pct, 0, 300, s::setValue);
+        HBox row = row(10, s, typed);
+        VBox box = new VBox(2, row);
+        box.getProperties().put("slider", s);
+        return box;
+    }
+
     /** A typeable "NN%" label for a 0..1 (or more) volume slider; {@code maxPct} is the most you can type. */
     public static javafx.scene.layout.StackPane percent(Slider s, double maxPct) {
         Label pct = label(Math.round(s.getValue() * 100) + "%", "small", "muted");

@@ -112,7 +112,7 @@ A web page served by Zyclipra on your PC: clip, record, browse/download clips, G
 mixer and soundboard – from your phone or another PC.
 
 1. *Settings › Hosting*: create a dashboard **username and password** (there's no default account).
-2. Press **Start dashboard**, then open `https://localhost:47820`.
+2. Press **Start dashboard**, then open `https://127.0.0.1:47820`.
 3. Optionally allow **devices on my home network**, or – for away from home – **Private VPN
    (Tailscale)**, which keeps the dashboard off the internet.
 

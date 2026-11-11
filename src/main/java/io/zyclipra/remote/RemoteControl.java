@@ -25,6 +25,35 @@ public interface RemoteControl {
     JsonElement saveReplay();
     JsonElement screenshot();
 
+    /** Starts a recording if none is running (idempotent); waits until it really started. */
+    default JsonElement startRecording() { throw new IllegalStateException("Not available here."); }
+    /** Stops the recording if one is running (idempotent); waits until the file is saved. */
+    default JsonElement stopRecording() { throw new IllegalStateException("Not available here."); }
+    /** Turns instant replay on or off (idempotent). */
+    default JsonElement setReplay(boolean on) { throw new IllegalStateException("Not available here."); }
+    /** Sets how many seconds instant replay keeps (15–300); restarts the buffer if it's running. */
+    default JsonElement setReplaySeconds(int seconds) { throw new IllegalStateException("Not available here."); }
+
+    // ---------------- soundboard (the PC plays; dashboards only ask) ----------------
+
+    /** Plays (or restarts) a sound on the PC's soundboard output. */
+    default JsonElement soundPlay(String id) { throw new IllegalStateException("Not available here."); }
+    default JsonElement soundStop(String id) { throw new IllegalStateException("Not available here."); }
+    /** One sound's gain, 0–3 (0–300 %). */
+    default JsonElement soundVolume(String id, double gain) { throw new IllegalStateException("Not available here."); }
+    /** The master soundboard gain, 0–3. */
+    default JsonElement soundMaster(double gain) { throw new IllegalStateException("Not available here."); }
+    /** The "never louder than 100 %" safety setting. */
+    default JsonElement soundLimit(boolean on) { throw new IllegalStateException("Not available here."); }
+    /** Button colour (#RRGGBB or "") and/or icon (emoji or up to 2 letters); null leaves it as it is. */
+    default JsonElement soundLook(String id, String color, String icon) { throw new IllegalStateException("Not available here."); }
+    default JsonElement soundMove(String id, int index) { throw new IllegalStateException("Not available here."); }
+    default JsonElement soundPage(String id, String page) { throw new IllegalStateException("Not available here."); }
+    /** Where the PC plays sounds ("" = Windows default); must be one of the listed outputs. */
+    default JsonElement soundOutput(String device) { throw new IllegalStateException("Not available here."); }
+    /** The PC's playback devices, for the output picker. */
+    default JsonElement soundOutputs() { return new com.google.gson.JsonArray(); }
+
     void setChannel(String id, double volume, boolean muted);
     void playSound(String id);
     void stopSounds();

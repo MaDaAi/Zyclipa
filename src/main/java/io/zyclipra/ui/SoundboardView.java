@@ -47,6 +47,9 @@ public final class SoundboardView implements View {
     private String category = "All";
     private final Timeline timer;
     private final Map<String, VBox> padById = new HashMap<>();
+    private VBox masterBox;
+    private boolean syncing;
+    private String shownSignature = "";
 
     public SoundboardView(AppContext ctx, MainWindow win) {
         this.ctx = ctx;
@@ -56,10 +59,9 @@ public final class SoundboardView implements View {
 
         Button importBtn = Ui.button("Add sounds", Icons.PLUS, this::importFiles, "primary");
         Button stopAll = Ui.button("Stop all", Icons.STOP, () -> { sb.stopAll(); refreshState(); });
-        Slider master = Ui.fill(new Slider(0, 1, cfg.masterVolume));
-        master.setPrefWidth(160);
-        master.setAccessibleText("Soundboard volume");
-        master.valueProperty().addListener((o, a, b) -> { cfg.masterVolume = b.doubleValue(); ctx.store.save(); });
+        masterBox = Ui.gainSlider(cfg.masterVolume, "Soundboard", g -> { if (!syncing) sb.setMasterVolume(g); });
+        masterBox.setPrefWidth(420);
+        ToggleButton cap = Ui.toggleSwitch(cfg.limitTo100, "Never louder than 100 %", b -> sb.setLimitTo100(b));
         ComboBox<String> out = new ComboBox<>(), route = new ComboBox<>();
         out.setAccessibleText("Play on");
         route.setAccessibleText("Also send to");
@@ -74,7 +76,12 @@ public final class SoundboardView implements View {
         VBox output = Ui.section("Output", null);
         output.getChildren().addAll(
                 Ui.row(14, Ui.field("I hear sounds on", out), Ui.field("Friends hear sounds through (virtual cable used as mic in chat)", route)),
-                Ui.row(10, Ui.label("Play on my device too", "h3"), local, Ui.grow(), Icons.of(Icons.VOLUME, 16), master, Ui.percent(master, 100)));
+                Ui.row(10, Ui.label("Play on my device too", "h3"), local),
+                Ui.row(14, Ui.label("Soundboard volume", "h3"), masterBox),
+                Ui.row(10, Ui.label("Never louder than 100 %", "h3"), cap, Ui.grow()),
+                Ui.label("Volume is amplitude gain: 100 % plays a sound as recorded, 200 % and 300 % make it 2× and 3× louder in amplitude. "
+                        + "A sound's own volume and the soundboard volume multiply (capped at 300 %), and a limiter stops the result from clipping. "
+                        + "Amplifying still changes how loud sounds sound, and it can't fix a file that's already distorted.", "small", "muted"));
 
         Button newCat = Ui.button("New collection", Icons.FOLDER, () -> {
             TextInputDialog d = new TextInputDialog();
@@ -99,7 +106,7 @@ public final class SoundboardView implements View {
         sp.setFitToWidth(true);
         node.setTop(MainWindow.pageHead("Soundboard"));
         node.setCenter(sp);
-        timer = new Timeline(new KeyFrame(Duration.millis(250), e -> refreshState()));
+        timer = new Timeline(new KeyFrame(Duration.millis(250), e -> { if (!signature().equals(shownSignature)) refresh(); else refreshState(); }));
         timer.setCycleCount(Timeline.INDEFINITE);
     }
 
@@ -134,8 +141,22 @@ public final class SoundboardView implements View {
         });
     }
 
+    /** Everything that changes how the page looks (names, volumes, colours, order…), so dashboard edits show up live. */
+    private String signature() {
+        Settings.Soundboard cfg = ctx.soundboard.config();
+        StringBuilder b = new StringBuilder().append(cfg.masterVolume).append(cfg.limitTo100).append(cfg.categories);
+        for (Settings.Sound x : cfg.sounds) b.append(x.id).append(x.name).append(x.volume).append(x.color).append(x.icon).append(x.category).append(x.loop).append(x.hotkey);
+        return b.toString();
+    }
+
     void refresh() {
         Settings.Soundboard cfg = ctx.soundboard.config();
+        shownSignature = signature();
+        if (masterBox != null && masterBox.getProperties().get("slider") instanceof Slider ms) {
+            syncing = true;
+            ms.setValue(Math.round(cfg.masterVolume * 100));
+            syncing = false;
+        }
         tabs.getChildren().clear();
         List<String> cats = new ArrayList<>(List.of("All"));
         cats.addAll(cfg.categories);
@@ -172,6 +193,11 @@ public final class SoundboardView implements View {
     void refreshState() {
         for (Map.Entry<String, VBox> e : padById.entrySet()) {
             boolean on = ctx.soundboard.isPlaying(e.getKey());
+            if (e.getValue().getProperties().get("progress") instanceof javafx.scene.control.ProgressBar pb) {
+                double p = ctx.soundboard.progress(e.getKey());
+                pb.setProgress(Math.max(0, p));
+                pb.setVisible(on);
+            }
             if (on && !e.getValue().getStyleClass().contains("pad-playing")) e.getValue().getStyleClass().add("pad-playing");
             if (!on) e.getValue().getStyleClass().remove("pad-playing");
             if (e.getValue().getProperties().get("play") instanceof Button b) {
@@ -181,9 +207,31 @@ public final class SoundboardView implements View {
         }
     }
 
+    private void lookDialog(Settings.Sound s) {
+        javafx.scene.control.ColorPicker colour = new javafx.scene.control.ColorPicker(
+                s.color.isBlank() ? javafx.scene.paint.Color.web("#5B6CF9") : javafx.scene.paint.Color.web(s.color));
+        javafx.scene.control.TextField icon = new javafx.scene.control.TextField(s.icon);
+        icon.setPromptText("e.g. 🔥 or GG");
+        icon.setPrefColumnCount(4);
+        javafx.scene.control.CheckBox none = new javafx.scene.control.CheckBox("No colour");
+        none.setSelected(s.color.isBlank());
+        VBox body = new VBox(12, Ui.field("Button colour", Ui.row(10, colour, none)), Ui.field("Icon (one emoji or up to 2 letters)", icon));
+        javafx.scene.control.Dialog<javafx.scene.control.ButtonType> d = new javafx.scene.control.Dialog<>();
+        d.setTitle("Colour and icon");
+        d.setHeaderText(s.name);
+        d.getDialogPane().setContent(body);
+        d.getDialogPane().getButtonTypes().addAll(javafx.scene.control.ButtonType.OK, javafx.scene.control.ButtonType.CANCEL);
+        ClipsView.style(d.getDialogPane());
+        if (d.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL) != javafx.scene.control.ButtonType.OK) return;
+        javafx.scene.paint.Color c = colour.getValue();
+        String hex = none.isSelected() ? "" : String.format("#%02X%02X%02X", Math.round(c.getRed() * 255), Math.round(c.getGreen() * 255), Math.round(c.getBlue() * 255));
+        try { ctx.soundboard.setLook(s.id, hex, icon.getText()); refresh(); }
+        catch (IllegalArgumentException e) { win.toast(e.getMessage(), true); }
+    }
+
     private VBox pad(Settings.Sound s) {
         SoundboardService sb = ctx.soundboard;
-        Label name = Ui.label(s.name, "pad-name");
+        Label name = Ui.label((s.icon.isBlank() ? "" : s.icon + "  ") + s.name, "pad-name");
         name.setWrapText(false);
         Button play = Ui.button(null, Icons.PLAY, () -> { sb.toggle(s.id); refreshState(); }, "primary");
         play.setAccessibleText("Play");
@@ -192,10 +240,8 @@ public final class SoundboardView implements View {
         Button more = Ui.iconButton(Icons.MORE, "Sound options", () -> { });
         HBox top = Ui.row(8, play, new VBox(2, name, meta), Ui.grow(), more);
         HBox.setHgrow(top.getChildren().get(1), Priority.ALWAYS);
-        Slider vol = Ui.fill(new Slider(0, 1, s.volume));
-        vol.setAccessibleText(s.name + " volume");
+        VBox vol = Ui.gainSlider(s.volume, s.name, g -> sb.setVolume(s.id, g));
         HBox.setHgrow(vol, Priority.ALWAYS);
-        vol.valueProperty().addListener((o, a, b) -> { s.volume = b.doubleValue(); sb.update(s); });
         Button assign = Ui.button(s.hotkey.isBlank() ? "Assign key" : null, null, () -> { }, "outline");
         if (!s.hotkey.isBlank()) assign.setGraphic(keys);
         assign.setAccessibleText("Shortcut for " + s.name);
@@ -211,7 +257,7 @@ public final class SoundboardView implements View {
             if (err != null) win.toast(err, true);
             refresh();
         });
-        HBox bottom = Ui.row(8, Icons.of(Icons.VOLUME, 14), vol, Ui.percent(vol, 100));
+        HBox bottom = Ui.row(8, Icons.of(Icons.VOLUME, 14), vol);
         assign.setMaxWidth(Double.MAX_VALUE);
 
         MenuItem loop = new MenuItem(s.loop ? "Stop looping" : "Loop this sound");
@@ -226,14 +272,16 @@ public final class SoundboardView implements View {
             ClipsView.style(d.getDialogPane());
             d.showAndWait().ifPresent(n -> { try { sb.rename(s.id, n); refresh(); } catch (Exception ex) { win.toast(ex.getMessage(), true); } });
         });
+        MenuItem look = new MenuItem("Colour and icon…");
+        look.setOnAction(e -> lookDialog(s));
         MenuItem clearKey = new MenuItem("Remove shortcut");
         clearKey.setDisable(s.hotkey.isBlank());
         clearKey.setOnAction(e -> { s.hotkey = ""; sb.update(s); ctx.hotkeys.unbind("sound:" + s.id); refresh(); });
-        ContextMenu menu = new ContextMenu(again, loop, rename, clearKey);
+        ContextMenu menu = new ContextMenu(again, loop, rename, look, clearKey);
         for (String c : sb.config().categories) {
             if (c.equals(s.category)) continue;
             MenuItem m = new MenuItem("Move to " + c);
-            m.setOnAction(e -> { s.category = c; sb.update(s); refresh(); });
+            m.setOnAction(e -> { sb.setCategory(s.id, c); refresh(); });
             menu.getItems().add(m);
         }
         MenuItem del = new MenuItem("Delete");
@@ -243,9 +291,39 @@ public final class SoundboardView implements View {
         menu.getItems().add(del);
         more.setOnAction(e -> menu.show(more, Side.BOTTOM, 0, 0));
 
-        VBox v = new VBox(12, top, bottom, assign);
+        javafx.scene.control.ProgressBar progress = new javafx.scene.control.ProgressBar(0);
+        progress.setMaxWidth(Double.MAX_VALUE);
+        progress.setPrefHeight(4);
+        progress.getStyleClass().add("pad-progress");
+        progress.setVisible(false);
+        VBox v = new VBox(12, top, progress, bottom, assign);
         v.getStyleClass().add("pad");
+        if (!s.color.isBlank()) v.setStyle("-fx-border-color: " + s.color + "; -fx-border-width: 0 0 0 5; -fx-border-radius: 4;");
         v.getProperties().put("play", play);
+        v.getProperties().put("progress", progress);
+        // Drag a button onto another to put it in that place.
+        v.setOnDragDetected(e -> {
+            javafx.scene.input.Dragboard db = v.startDragAndDrop(TransferMode.MOVE);
+            javafx.scene.input.ClipboardContent cc = new javafx.scene.input.ClipboardContent();
+            cc.putString("zyclipra-sound:" + s.id);
+            db.setContent(cc);
+            db.setDragView(v.snapshot(null, null));
+            e.consume();
+        });
+        v.setOnDragOver(e -> {
+            if (e.getDragboard().hasString() && e.getDragboard().getString().startsWith("zyclipra-sound:")) e.acceptTransferModes(TransferMode.MOVE);
+            e.consume();
+        });
+        v.setOnDragDropped(e -> {
+            String moving = e.getDragboard().getString().substring("zyclipra-sound:".length());
+            if (!moving.equals(s.id)) {
+                int to = sb.sounds().indexOf(s);
+                sb.move(moving, to);
+                refresh();
+            }
+            e.setDropCompleted(true);
+            e.consume();
+        });
         v.setOnMouseClicked(e -> {
             if (e.getTarget() == v || e.getTarget() instanceof Label) { sb.toggle(s.id); refreshState(); }
         });

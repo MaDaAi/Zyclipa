@@ -249,17 +249,118 @@ public final class AppContext implements RemoteControl {
         return a;
     }
 
+    /** The whole soundboard as dashboards show it: buttons, pages, volumes and what's playing. */
     @Override public JsonElement sounds() {
+        Settings.Soundboard cfg = soundboard.config();
+        JsonObject root = new JsonObject();
+        root.addProperty("master", cfg.masterVolume);
+        root.addProperty("limitTo100", cfg.limitTo100);
+        root.addProperty("output", cfg.outputDevice);
+        JsonArray pages = new JsonArray();
+        cfg.categories.forEach(pages::add);
+        root.add("pages", pages);
         JsonArray a = new JsonArray();
         for (Settings.Sound s : soundboard.sounds()) {
             JsonObject o = new JsonObject();
             o.addProperty("id", s.id);
             o.addProperty("name", s.name);
             o.addProperty("category", s.category);
+            o.addProperty("volume", s.volume);
+            o.addProperty("color", s.color);
+            o.addProperty("icon", s.icon);
+            o.addProperty("loop", s.loop);
+            o.addProperty("hotkey", s.hotkey);
+            o.addProperty("duration", Math.round(soundboard.durationSec(s) * 10) / 10.0);
             o.addProperty("playing", soundboard.isPlaying(s.id));
+            o.addProperty("progress", soundboard.progress(s.id));
             a.add(o);
         }
+        root.add("sounds", a);
+        return root;
+    }
+
+    private java.util.List<String> outputsCache = java.util.List.of();
+    private long outputsAt;
+
+    /** Playback devices (cached for 30 s; listing them can take a moment). */
+    @Override public JsonElement soundOutputs() {
+        if (System.currentTimeMillis() - outputsAt > 30_000) {
+            outputsCache = io.zyclipra.audio.SoundDevices.outputs().stream().filter(d -> !d.startsWith("Primary Sound")).toList();
+            outputsAt = System.currentTimeMillis();
+        }
+        JsonArray a = new JsonArray();
+        outputsCache.forEach(a::add);
         return a;
+    }
+
+    @Override public JsonElement soundPlay(String id) {
+        Settings.Sound s = soundboard.find(id).orElseThrow(() -> new IllegalArgumentException("That sound doesn't exist (any more)."));
+        soundboard.play(id);
+        if (!soundboard.isPlaying(id)) throw new IllegalStateException("“" + s.name + "” couldn't play on the PC – check the soundboard output in Zyclipra.");
+        return result("Playing “" + s.name + "” on your PC.");
+    }
+
+    @Override public JsonElement soundStop(String id) {
+        soundboard.stop(id);
+        return result("Stopped.");
+    }
+
+    @Override public JsonElement soundVolume(String id, double gain) {
+        soundboard.setVolume(id, gain);
+        return result("Volume " + Math.round(io.zyclipra.soundboard.SoundboardService.clampGain(gain) * 100) + " %");
+    }
+
+    @Override public JsonElement soundMaster(double gain) {
+        soundboard.setMasterVolume(gain);
+        return result("Soundboard volume " + Math.round(io.zyclipra.soundboard.SoundboardService.clampGain(gain) * 100) + " %");
+    }
+
+    @Override public JsonElement soundLimit(boolean on) {
+        soundboard.setLimitTo100(on);
+        return result(on ? "Sounds are now never louder than 100 %." : "Amplification up to 300 % allowed.");
+    }
+
+    @Override public JsonElement soundLook(String id, String color, String icon) { soundboard.setLook(id, color, icon); return result("Saved."); }
+
+    @Override public JsonElement soundMove(String id, int index) { soundboard.move(id, index); return result("Moved."); }
+
+    @Override public JsonElement soundPage(String id, String page) { soundboard.setCategory(id, page); return result("Moved to " + page + "."); }
+
+    @Override public JsonElement soundOutput(String device) {
+        if (!device.isEmpty()) {
+            soundOutputs();
+            if (!outputsCache.contains(device)) throw new IllegalArgumentException("That playback device isn't available on the PC.");
+        }
+        soundboard.config().outputDevice = device;
+        store.save();
+        bus.emit(EventBus.SOUNDS_CHANGED, null);
+        return result("Sounds play on " + (device.isEmpty() ? "the Windows default device" : device) + ".");
+    }
+
+    @Override public JsonElement startRecording() {
+        if (recorder.state() == RecordingService.State.RECORDING) return result("Already recording.");
+        return toggleRecording();
+    }
+
+    @Override public JsonElement stopRecording() {
+        if (recorder.state() == RecordingService.State.IDLE) return result("Not recording.");
+        return toggleRecording();
+    }
+
+    @Override public JsonElement setReplay(boolean on) {
+        if (replay.running() == on) return result(on ? "Instant replay is already on." : "Instant replay is already off.");
+        return toggleReplay();
+    }
+
+    @Override public JsonElement setReplaySeconds(int seconds) {
+        settings.recording.replaySeconds = Math.max(15, Math.min(300, seconds));
+        store.save();
+        if (replay.running()) {
+            await(replay.stop(), 20, "Restarting instant replay");
+            await(replay.start(), 20, "Restarting instant replay");
+            if (!replay.running()) throw new IllegalStateException("Instant replay didn't restart" + (replay.lastError().isBlank() ? "." : ": " + replay.lastError()));
+        }
+        return result("Instant replay keeps the last " + settings.recording.replaySeconds + " s.");
     }
 
     // ---- dashboard actions: they run on this PC and report what really happened

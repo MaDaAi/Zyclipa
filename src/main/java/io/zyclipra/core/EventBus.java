@@ -25,6 +25,7 @@ public final class EventBus {
     public static final String RECORDING_CHANGED = "recording.changed";
     public static final String REPLAY_CHANGED = "replay.changed";
     public static final String CLIPS_CHANGED = "clips.changed";
+    public static final String SOUNDS_CHANGED = "sounds.changed";
     public static final String NOTIFY = "notify";
     public static final String ERROR = "error";
 }

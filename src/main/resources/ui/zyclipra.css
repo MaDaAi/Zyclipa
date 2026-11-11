@@ -307,3 +307,9 @@
 .titled-pane.plain-titled > .content { -fx-background-color: -card; -fx-border-color: transparent; -fx-padding: 4 20 18 20; }
 .google-signin { -fx-background-color: white; -fx-text-fill: #1F1F1F; -icon-color: #4285F4; -fx-font-weight: 600; -fx-padding: 9 18; }
 .google-signin:hover { -fx-background-color: #F1F3F4; }
+.gain-slider .axis { -fx-tick-label-fill: -muted; -fx-tick-label-font-size: 10px; }
+.gain-slider .axis-tick-mark { -fx-stroke: #6A7180; }
+.gain-slider .axis-minor-tick-mark { -fx-stroke: #4A505C; }
+.pad-progress { -fx-accent: -accent; }
+.pad-progress > .bar { -fx-background-insets: 0; -fx-padding: 2; }
+.pad-progress > .track { -fx-background-color: #1B1F25; -fx-background-insets: 0; }

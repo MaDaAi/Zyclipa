@@ -56,6 +56,7 @@ public final class DashboardServer {
     private final Settings.Remote cfg;
     private final DashboardAuth auth;
     private final RemoteControl control;
+    private final Commands commands;
     private final Path keystore;
     private final SecretStore keystorePass;
     /** Random per run: lets "public" mode check that its https:// address really reaches this app. */
@@ -70,6 +71,7 @@ public final class DashboardServer {
         this.cfg = cfg;
         this.auth = auth;
         this.control = control;
+        this.commands = new Commands(control);
         this.keystore = keystore;
         this.keystorePass = keystorePass;
     }
@@ -148,7 +150,7 @@ public final class DashboardServer {
     /** Addresses that really lead to the dashboard with the current settings (none are shown that aren't set up). */
     public List<Url> addresses() {
         List<Url> out = new ArrayList<>();
-        out.add(new Url("This PC", "https://localhost:" + port()));
+        out.add(new Url("This PC", "https://127.0.0.1:" + port()));
         if ("public".equals(cfg.mode)) {
             if (!cfg.publicUrl.isBlank() && cfg.publicVerifiedAt > 0) out.add(new Url("Internet (your reverse proxy)", cfg.publicUrl));
             return out;
@@ -324,6 +326,13 @@ public final class DashboardServer {
         String sessionId = auth.sessionId(token);
         if (sessionId == null) { send(ex, 401, json("error", auth.configured() ? "Please sign in." : "Finish setting up the dashboard in the Zyclipra app first.")); return; }
 
+        // Remote commands: same rules for every dashboard (real results, duplicate ids answered once, sound rate limit).
+        if (post && Commands.isCommand(route)) {
+            Commands.Reply r = commands.run(sessionId, ex.getRequestHeaders().getFirst("X-Command-Id"), route, body);
+            send(ex, r.status(), r.body());
+            return;
+        }
+
         switch (method + " " + route) {
             case "GET status" -> send(ex, 200, control.status());
             case "GET clips" -> send(ex, 200, control.clips("all".equals(query(ex, "limit")) ? 100_000 : 24));
@@ -332,19 +341,7 @@ public final class DashboardServer {
             case "GET levels" -> send(ex, 200, control.levels());
             case "GET mixer" -> send(ex, 200, control.mixer());
             case "GET sounds" -> send(ex, 200, control.sounds());
-            case "POST recording/toggle" -> send(ex, 200, control.toggleRecording());
-            case "POST replay/toggle" -> send(ex, 200, control.toggleReplay());
-            case "POST replay/save" -> send(ex, 200, control.saveReplay());
-            case "POST screenshot" -> send(ex, 200, control.screenshot());
-            case "POST sounds/stop" -> { control.stopSounds(); send(ex, 200, json("ok", "true")); }
-            case "POST mixer" -> {
-                String id = str(body, "channel");
-                double v = body.has("volume") ? body.get("volume").getAsDouble() : -1;
-                if (!(v >= 0 && v <= 1)) throw new IllegalArgumentException("volume must be 0..1");
-                control.setChannel(id, v, body.has("muted") && body.get("muted").getAsBoolean());
-                send(ex, 200, json("ok", "true"));
-            }
-            case "POST sounds/play" -> { control.playSound(str(body, "id")); send(ex, 200, json("ok", "true")); }
+            case "GET sounds/outputs" -> send(ex, 200, control.soundOutputs());
 
             // ---- account & security
             case "POST logout" -> { auth.logout(token); send(ex, 200, json("ok", "true")); }
@@ -367,12 +364,6 @@ public final class DashboardServer {
             // ---- Google Drive (the desktop app keeps the Google sign-in; the dashboard never sees tokens)
             case "GET cloud" -> send(ex, 200, control.cloudStatus());
             case "GET cloud/avatar" -> serveFile(ex, control.cloudAvatar().orElse(null), false);
-            case "POST cloud/settings" -> send(ex, 200, control.cloudSettings(body));
-            case "POST cloud/upload" -> send(ex, 200, control.cloudUpload(checkId(str(body, "id"))));
-            case "POST cloud/retry" -> send(ex, 200, control.cloudRetry(body.has("id") ? checkId(str(body, "id")) : null));
-            case "POST cloud/cancel" -> send(ex, 200, control.cloudCancel(checkId(str(body, "id"))));
-            case "POST cloud/connect" -> send(ex, 200, control.cloudConnect());
-            case "POST cloud/disconnect" -> send(ex, 200, control.cloudDisconnect());
             default -> send(ex, 404, json("error", "unknown endpoint"));
         }
     }

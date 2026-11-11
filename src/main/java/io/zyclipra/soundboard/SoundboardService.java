@@ -67,6 +67,77 @@ public final class SoundboardService {
     }
 
     public boolean isPlaying(String id) { return playing.containsKey(id); }
+
+    /** How far a playing sound has got (0..1), or -1 when it isn't playing. */
+    public double progress(String id) {
+        Playback p = playing.get(id);
+        return p == null ? -1 : p.progress();
+    }
+
+    public static final double MAX_GAIN = 3.0;
+
+    /**
+     * The gain a sound actually plays at: its own gain × the master gain, each 0–3, with the product capped
+     * at 3× (or at 1× when "limit to 100%" is on). The peak limiter after it stops the result clipping.
+     */
+    public static double gainFor(double soundGain, double masterGain, boolean limitTo100) {
+        double g = clampGain(soundGain) * clampGain(masterGain);
+        return Math.min(limitTo100 ? 1.0 : MAX_GAIN, g);
+    }
+
+    public static double clampGain(double g) { return Double.isNaN(g) ? 1.0 : Math.max(0, Math.min(MAX_GAIN, g)); }
+
+    public void setVolume(String id, double gain) {
+        Settings.Sound s = find(id).orElseThrow(() -> new IllegalArgumentException("unknown sound"));
+        s.volume = clampGain(gain);
+        store.save();
+        bus.emit(EventBus.SOUNDS_CHANGED, null);
+    }
+
+    public void setMasterVolume(double gain) {
+        cfg.masterVolume = clampGain(gain);
+        store.save();
+        bus.emit(EventBus.SOUNDS_CHANGED, null);
+    }
+
+    public void setLimitTo100(boolean on) {
+        cfg.limitTo100 = on;
+        store.save();
+        bus.emit(EventBus.SOUNDS_CHANGED, null);
+    }
+
+    /** Colour (#RRGGBB or "") and icon (emoji or up to 2 characters, or ""). */
+    public void setLook(String id, String color, String icon) {
+        Settings.Sound s = find(id).orElseThrow(() -> new IllegalArgumentException("unknown sound"));
+        if (color != null) {
+            if (!color.isEmpty() && !color.matches("#[0-9A-Fa-f]{6}")) throw new IllegalArgumentException("Colours look like #FF8800.");
+            s.color = color.toUpperCase(java.util.Locale.ROOT);
+        }
+        if (icon != null) {
+            String t = icon.strip();
+            if (t.codePointCount(0, t.length()) > 2 || t.length() > 8) throw new IllegalArgumentException("Use one emoji or up to 2 letters.");
+            s.icon = t;
+        }
+        store.save();
+        bus.emit(EventBus.SOUNDS_CHANGED, null);
+    }
+
+    /** Moves a sound to a new place in the list (the order buttons are shown in). */
+    public synchronized void move(String id, int toIndex) {
+        Settings.Sound s = find(id).orElseThrow(() -> new IllegalArgumentException("unknown sound"));
+        cfg.sounds.remove(s);
+        cfg.sounds.add(Math.max(0, Math.min(cfg.sounds.size(), toIndex)), s);
+        store.save();
+        bus.emit(EventBus.SOUNDS_CHANGED, null);
+    }
+
+    public void setCategory(String id, String category) {
+        Settings.Sound s = find(id).orElseThrow(() -> new IllegalArgumentException("unknown sound"));
+        if (!cfg.categories.contains(category)) throw new IllegalArgumentException("unknown page");
+        s.category = category;
+        store.save();
+        bus.emit(EventBus.SOUNDS_CHANGED, null);
+    }
     public Set<String> playingIds() { return Set.copyOf(playing.keySet()); }
 
     /** Imports (copies and converts) an audio file. Throws with a clear message for bad files. */
@@ -161,13 +232,34 @@ public final class SoundboardService {
         Playback p = new Playback(s, data, formats.get(s.id));
         playing.put(id, p);
         p.start();
+        bus.emit(EventBus.SOUNDS_CHANGED, null);
+    }
+
+    /**
+     * One block of soundboard audio: gain ramped from {@code from} to {@code to} across the block (so
+     * changing the volume mid-sound never clicks or jumps), then the peak limiter.
+     */
+    public static void render(float[] f, int samples, int channels, float from, float to, PeakLimiterRef limiter) {
+        int frames = Math.max(1, samples / Math.max(1, channels));
+        for (int i = 0; i < samples; i++) {
+            float t = (i / Math.max(1, channels)) / (float) frames;
+            f[i] *= from + (to - from) * t;
+        }
+        if (limiter != null) limiter.limiter.process(f, samples);
+    }
+
+    /** Small holder so callers outside this package needn't import the DSP class. */
+    public static final class PeakLimiterRef {
+        final io.zyclipra.audio.dsp.PeakLimiter limiter;
+        public PeakLimiterRef(int channels, float sampleRate) { limiter = new io.zyclipra.audio.dsp.PeakLimiter(channels, sampleRate, 0.95f); }
+        public float gainReduction() { return limiter.gain(); }
     }
 
     public void toggle(String id) { if (isPlaying(id)) stop(id); else play(id); }
 
     public void stop(String id) {
         Playback p = playing.remove(id);
-        if (p != null) p.halt();
+        if (p != null) { p.halt(); bus.emit(EventBus.SOUNDS_CHANGED, null); }
     }
 
     public void stopAll() { for (String id : List.copyOf(playing.keySet())) stop(id); }
@@ -213,6 +305,20 @@ public final class SoundboardService {
         private final byte[] data;
         private final AudioFormat fmt;
         private volatile boolean stop;
+        private volatile int position;
+        private volatile SourceDataLine heard;
+
+        /**
+         * How much has actually been heard: the output device's own playback position (audio handed to Windows
+         * is buffered ahead of what comes out of the speakers). Falls back to what was sent if there's no device.
+         */
+        double progress() {
+            if (data.length == 0) return 1;
+            SourceDataLine l = heard;
+            long bytes = l != null ? l.getLongFramePosition() * fmt.getFrameSize() : position;
+            // One-shots stop at 100 % (the device keeps counting while the last buffer drains); loops wrap.
+            return sound.loop ? (bytes % data.length) / (double) data.length : Math.min(1, bytes / (double) data.length);
+        }
 
         Playback(Settings.Sound s, byte[] data, AudioFormat fmt) {
             super("sound-" + s.id);
@@ -245,20 +351,26 @@ public final class SoundboardService {
                     catch (Exception e) { bus.emit(EventBus.ERROR, "Soundboard route device unavailable: " + e.getMessage()); }
                 }
                 if (lines.isEmpty()) return;
+                heard = lines.get(0);
                 Equalizer eq = cfg.useEq ? new Equalizer(fmt.getChannels(), fmt.getSampleRate(), settings.equalizer) : null;
                 float[] f = new float[block / 2];
                 byte[] out = new byte[block];
+                PeakLimiterRef limiter = new PeakLimiterRef(fmt.getChannels(), fmt.getSampleRate());
+                float last = (float) gainFor(sound.volume, cfg.masterVolume, cfg.limitTo100);
                 do {
                     for (int pos = 0; pos < data.length && !stop; pos += block) {
                         int len = Math.min(block, data.length - pos);
                         len -= len % frame;
                         if (len <= 0) break;
+                        position = pos;
                         System.arraycopy(data, pos, out, 0, len);
                         int samples = len / 2;
                         SoundDevices.toFloat(out, len, f);
-                        float g = (float) (sound.volume * cfg.masterVolume);
-                        for (int i = 0; i < samples; i++) f[i] *= g;
                         if (eq != null) eq.process(f, samples / fmt.getChannels());
+                        // Re-read every 20 ms block so volume changes (from the app or a dashboard) apply while playing.
+                        float g = (float) gainFor(sound.volume, cfg.masterVolume, cfg.limitTo100);
+                        render(f, samples, fmt.getChannels(), last, g, limiter);
+                        last = g;
                         SoundDevices.toBytes(f, samples, out);
                         for (SourceDataLine l : lines) l.write(out, 0, len);
                         tap(out, len);
@@ -274,7 +386,7 @@ public final class SoundboardService {
                 io.zyclipra.audio.AudioFeed f = recordingTap.get();
                 if (f != null) f.endSource(this);
                 for (SourceDataLine l : lines) { l.stop(); l.flush(); l.close(); }
-                playing.remove(sound.id, this);
+                if (playing.remove(sound.id, this)) bus.emit(EventBus.SOUNDS_CHANGED, null);
             }
         }
     }

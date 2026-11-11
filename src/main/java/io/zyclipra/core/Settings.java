@@ -150,9 +150,13 @@ public final class Settings {
         public String name;
         public String file;       // stored copy inside the data folder
         public String category = "General";
+        /** Gain for this sound: 0 = silent, 1 = as recorded, up to 3 = 3× amplitude. */
         public double volume = 1.0;
         public boolean loop = false;
         public String hotkey = "";
+        /** Button colour (#RRGGBB, "" = default) and a short icon (an emoji or up to 2 letters). */
+        public String color = "";
+        public String icon = "";
     }
 
     public static final class Soundboard {
@@ -160,7 +164,10 @@ public final class Settings {
         public List<String> categories = new ArrayList<>(List.of("General"));
         public String outputDevice = "";    // local playback device ("" = default)
         public String micRouteDevice = "";  // second device, e.g. a virtual cable feeding voice chat
+        /** Gain for all sounds, 0–3 (100% = 1). Combined with each sound's gain; see SoundboardService.gainFor. */
         public double masterVolume = 1.0;
+        /** Safety: never play louder than the original recording (caps the combined gain at 100%). */
+        public boolean limitTo100 = false;
         public boolean playLocally = true;
         public boolean useEq = false;
     }
@@ -300,12 +307,14 @@ public final class Settings {
             if (x.name == null || x.name.isBlank()) x.name = "Sound";
             if (x.category == null || x.category.isBlank()) x.category = "General";
             if (!s.categories.contains(x.category)) s.categories.add(x.category);
-            x.volume = clampD(x.volume, 0, 1);
+            x.volume = clampD(x.volume, 0, 3);   // 0–300 %
             if (x.hotkey == null) x.hotkey = "";
+            if (x.color == null || !x.color.matches("#[0-9A-Fa-f]{6}")) x.color = "";
+            if (x.icon == null || x.icon.length() > 8) x.icon = "";
         }
         if (s.outputDevice == null) s.outputDevice = "";
         if (s.micRouteDevice == null) s.micRouteDevice = "";
-        s.masterVolume = clampD(s.masterVolume, 0, 1);
+        s.masterVolume = clampD(s.masterVolume, 0, 3);
 
         if (cloud.clientId == null) cloud.clientId = "";
         if (cloud.clientSecret == null) cloud.clientSecret = "";

@@ -126,7 +126,7 @@ the dashboard can't be started before this is done. Then press **Start dashboard
 
 ### On this PC
 
-Open **https://localhost:47820** (the port can be changed; a port already used by another program
+Open **https://127.0.0.1:47820** (the port can be changed; a port already used by another program
 is reported). Your browser warns once because the certificate is made on your PC. Check that the
 fingerprint shown in *Settings › Hosting* matches, then continue.
 

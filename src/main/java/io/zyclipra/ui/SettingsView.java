@@ -683,7 +683,7 @@ public final class SettingsView implements View {
         lanSw.setDisable(pub);
         vpnSw.setDisable(pub);
         access.getChildren().addAll(
-                Ui.settingRow("This PC", "Always allowed (https://localhost).", Ui.label("On", "small", "ok-text")),
+                Ui.settingRow("This PC", "Always allowed (https://127.0.0.1).", Ui.label("On", "small", "ok-text")),
                 Ui.settingRow("Devices on my home network", "Phones and PCs on the same Wi-Fi or router. Off by default.", lanSw),
                 Ui.settingRow("Private VPN – Tailscale (recommended for away from home)",
                         (ts.isEmpty() ? "Tailscale isn't running on this PC. " : "Tailscale found: " + String.join(", ", ts) + ". ")

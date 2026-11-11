@@ -2,6 +2,38 @@
 
 _Last updated: 2026-11-09 · version 0.1.0_
 
+## Round 12 (2026-11-11): remote clipping, soundboard 0–300 % and a mobile dashboard (local dashboard)
+
+- **One command path** (`remote/Commands.java`) for every dashboard action, so the planned hosted relay behaves the same:
+  - Each command answers with what really happened on the PC, never an early "OK".
+  - Command ids (`X-Command-Id`): a repeat within 10 min returns the first result and doesn't run again.
+  - Arguments are validated, and sound triggers are limited to 10 per 5 s per caller.
+- **Remote clipping**: Clip it, start/stop recording with a timer, screenshot, instant replay on/off and length from the dashboard.
+- **Soundboard gain 0–300 %** (linear amplitude):
+  - Each sound's gain multiplies with the master and is capped at 300 %. An optional "Never louder than 100 %" setting caps it at 100 %.
+  - The gain is applied in Zyclipra's own audio path, with smoothing per block and a peak limiter (ceiling 0.95) so it doesn't clip.
+  - The desktop slider has ticks at 100/200/300 and turns orange above 100 %.
+- **Soundboard management on both sides**:
+  - colour and icon, pages (categories), drag to reorder;
+  - progress while playing, stop / stop all;
+  - output device chosen from the dashboard.
+  - The PC is the source of truth and plays every sound.
+- **Mobile-first dashboard**:
+  - Tabs: Dashboard | Clips | Soundboard | Settings.
+  - A connection indicator; polling pauses while the tab is hidden.
+- **Fixes**:
+  - Sound progress uses the audio device's position (it ran ahead before) and stays at 100 % at the end.
+  - The dashboard address for this PC is now `https://127.0.0.1:port`. With `localhost`, Windows tries IPv6 first and some clients waited ~2 s per request; the certificate already covered 127.0.0.1.
+
+**Verified (scratch data folder, real app over HTTPS)**
+- A real 22 s replay clip was saved from the dashboard's Clip it. A repeated command id gave one screenshot, not two.
+- Sounds played on the PC's speakers.
+- Volume commands: master 300 %, per-sound 50 %, the limit switch, and a 400 % request refused with 400.
+- Play is acknowledged in 10–30 ms. Progress over a 2 s sound read 0.20, 0.40, 0.61, 0.81, then stopped.
+- 63 JUnit tests pass (9 hardware tests skipped), including the new SoundboardGainTest and CommandsTest.
+
+**Not built yet**: the GitHub Pages dashboard, the cloud relay with device pairing, and its web OAuth client (these need owner decisions).
+
 ## Round 11 (2026-11-11): one-click "Sign in with Google" – verified with a real account
 
 - **Bug fixed**: the Connect button's enabled state was computed once when the page opened, so pasting a client ID never enabled it.

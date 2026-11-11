@@ -260,7 +260,7 @@ class RemoteTest {
 
     @Test void listensOnLoopbackOnlyByDefaultAndCanRestart() throws Exception {
         assertEquals(1, server.addresses().size(), "only the This PC address is shown");
-        assertTrue(server.addresses().get(0).url().startsWith("https://localhost:"));
+        assertTrue(server.addresses().get(0).url().startsWith("https://127.0.0.1:"));
         // Nothing listens on the machine's LAN address: connecting there must fail.
         InetAddress lanAddr = null;
         for (var ni : java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces()))

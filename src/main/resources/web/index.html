@@ -2,24 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1E2228">
   <title>Zyclipra</title>
   <link rel="icon" type="image/png" href="/icon.png">
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
 </head>
 <body>
-  <header>
-    <img src="/logo.png" alt="" class="logo" width="34" height="34">
-    <h1>Zyclipra</h1>
-    <nav id="nav" hidden>
-      <button id="tab-clips" class="tab on" aria-pressed="true">Clips</button>
-      <button id="tab-control" class="tab" aria-pressed="false">Control</button>
-      <button id="tab-cloud" class="tab" aria-pressed="false">Cloud &amp; Sync</button>
-      <button id="tab-account" class="tab" aria-pressed="false">Account</button>
-    </nav>
+  <header class="top">
+    <img src="/logo.png" alt="" class="logo" width="30" height="30">
+    <span class="brand">Zyclipra</span>
+    <span id="conn" class="conn" hidden><span class="conn-dot"></span><span id="conn-text">Connected</span></span>
     <span class="grow"></span>
-    <button id="logout" class="ghost" hidden>Sign out</button>
+    <nav id="nav" class="tabs" hidden aria-label="Sections">
+      <button id="tab-home" class="tab on">Dashboard</button>
+      <button id="tab-clips" class="tab">Clips</button>
+      <button id="tab-sounds" class="tab">Soundboard</button>
+      <button id="tab-settings" class="tab">Settings</button>
+    </nav>
   </header>
 
   <section id="login" class="card narrow">
@@ -28,22 +29,43 @@
     <form id="login-form" class="stack">
       <label class="field">Username<input id="username" autocomplete="username" maxlength="32" required></label>
       <label class="field">Password<input id="password" type="password" autocomplete="current-password" maxlength="200" required></label>
-      <button type="submit" class="primary">Sign in</button>
+      <button type="submit" class="primary big">Sign in</button>
     </form>
     <p id="login-error" class="error-text" role="alert"></p>
   </section>
 
-  <main id="clips-view" hidden>
-    <section class="capture" aria-label="Capture">
-      <span id="cap-state" class="cap-state">–</span>
-      <span class="grow"></span>
-      <button id="cap-clip" class="primary big-btn">⚡ Clip it</button>
-      <button id="cap-rec" class="danger">● Record</button>
-      <button id="cap-shot">Screenshot</button>
+  <!-- Dashboard -->
+  <main id="home-view" class="view" hidden>
+    <button id="clip-it" class="clip-it" disabled>
+      <span class="clip-it-label">⚡ Clip it</span>
+      <span id="clip-it-sub" class="clip-it-sub">–</span>
+    </button>
+    <div class="action-row">
+      <button id="rec-btn" class="action rec"><span id="rec-icon">●</span><span id="rec-text">Record</span><span id="rec-timer" class="timer"></span></button>
+      <button id="shot-btn" class="action">📷<span>Screenshot</span></button>
+    </div>
+    <section class="card">
+      <div class="row between">
+        <div><h2>Instant replay</h2><p id="replay-state" class="muted small">–</p></div>
+        <label class="switch"><input type="checkbox" id="replay-switch" aria-label="Instant replay on or off"><span></span></label>
+      </div>
+      <label class="field inline">Keep the last
+        <select id="replay-length" aria-label="Instant replay length">
+          <option value="15">15 s</option><option value="30">30 s</option><option value="60">1 min</option>
+          <option value="120">2 min</option><option value="180">3 min</option><option value="300">5 min</option>
+        </select>
+      </label>
     </section>
+    <section class="card">
+      <div class="row between"><h2>Latest clips</h2><button id="see-clips" class="ghost">All clips ›</button></div>
+      <div id="recent" class="recent"></div>
+    </section>
+    <p id="sys" class="muted small center"></p>
+  </main>
+
+  <!-- Clips -->
+  <main id="clips-view" class="view" hidden>
     <div class="toolbar">
-      <h2 class="page-title">All clips <span id="clip-count" class="muted"></span></h2>
-      <span class="grow"></span>
       <input id="search" type="search" placeholder="Search clips" aria-label="Search clips">
       <select id="game" aria-label="Game"><option value="">All games</option></select>
       <select id="kind" aria-label="Show">
@@ -65,113 +87,116 @@
     <div id="clip-groups"></div>
   </main>
 
-  <main id="control-view" hidden>
-    <div class="grid">
-      <section class="card">
-        <h2>Recording</h2>
-        <p id="rec-state" class="big">–</p>
-        <div class="row"><button id="rec-btn" class="danger">Start recording</button><button id="shot-btn">Screenshot</button></div>
-      </section>
-      <section class="card">
-        <h2>Instant replay</h2>
-        <p id="replay-state" class="big">–</p>
-        <div class="row"><button id="replay-btn">Turn replay on</button><button id="save-btn" class="primary">Save replay</button></div>
-      </section>
-    </div>
+  <!-- Soundboard -->
+  <main id="sounds-view" class="view" hidden>
+    <section class="card sb-head">
+      <div class="row between">
+        <h2>Soundboard</h2>
+        <div class="row">
+          <button id="sb-edit" class="ghost" aria-pressed="false">Edit</button>
+          <button id="stop-all" class="danger">■ Stop all</button>
+        </div>
+      </div>
+      <div class="gain" id="master-gain"></div>
+      <label class="check"><input type="checkbox" id="sb-limit"> Never louder than 100 %</label>
+    </section>
+    <div id="sb-pages" class="chips" role="tablist"></div>
+    <p id="sb-hint" class="muted small"></p>
+    <div id="pads" class="pads"></div>
+    <section class="card">
+      <h2>Plays on</h2>
+      <select id="sb-output" aria-label="Soundboard output device"></select>
+      <p class="muted small">Sounds always play on your PC, not on this phone. Volume is amplitude gain: 100 % is as recorded, 300 % is 3×; a sound's volume and the soundboard volume multiply (capped at 300 %) and a limiter stops clipping. Amplifying can't fix a sound that's already distorted.</p>
+    </section>
+  </main>
+
+  <!-- Settings -->
+  <main id="settings-view" class="view" hidden>
+    <section class="card">
+      <div class="row">
+        <img id="cloud-avatar" class="avatar" alt="" width="44" height="44" hidden>
+        <div class="grow"><h2 id="cloud-title">Google Drive</h2><p id="cloud-account" class="muted"></p></div>
+      </div>
+      <div class="row wrap">
+        <button id="cloud-connect" class="primary" hidden>Sign in with Google</button>
+        <a id="cloud-folder" class="button" href="#" target="_blank" rel="noopener noreferrer" hidden>Open in Google Drive</a>
+        <button id="cloud-disconnect" class="ghost" hidden>Disconnect</button>
+      </div>
+      <p id="cloud-note" class="muted small"></p>
+      <h3>Automatic upload</h3>
+      <label class="check"><input type="checkbox" id="pref-autoUpload"> Upload new clips automatically</label>
+      <label class="check"><input type="checkbox" id="pref-uploadClips"> Clips (instant replays, trims)</label>
+      <label class="check"><input type="checkbox" id="pref-uploadRecordings"> Recordings</label>
+      <label class="check"><input type="checkbox" id="pref-uploadScreenshots"> Screenshots</label>
+      <div class="row between"><h3>Sync status</h3><button id="retry-all">Retry failed</button></div>
+      <p id="cloud-summary" class="muted small"></p>
+      <div id="cloud-queue"></div>
+    </section>
     <section class="card">
       <h2>Mixer</h2>
       <div id="mixer"></div>
     </section>
     <section class="card">
-      <div class="row between"><h2>Soundboard</h2><button id="stop-sounds">Stop all</button></div>
-      <div id="sounds" class="pads"></div>
-    </section>
-    <p id="sys" class="muted small"></p>
-  </main>
-
-  <main id="cloud-view" hidden>
-    <section class="card">
-      <div class="row">
-        <img id="cloud-avatar" class="avatar" alt="" width="48" height="48" hidden>
-        <div class="grow">
-          <h2 id="cloud-title">Google Drive</h2>
-          <p id="cloud-account" class="muted"></p>
-        </div>
-        <a id="cloud-folder" class="button" href="#" target="_blank" rel="noopener noreferrer" hidden>Open in Google Drive</a>
-        <button id="cloud-connect" class="primary" hidden>Sign in with Google</button>
-        <button id="cloud-disconnect" class="ghost" hidden>Disconnect</button>
-      </div>
-      <p id="cloud-note" class="muted small"></p>
-    </section>
-    <section class="card" id="cloud-prefs">
-      <h2>Automatic upload</h2>
-      <p class="muted small">New clips are copied to your Google Drive as soon as they're saved on your PC – including ones you clip from here.</p>
-      <label class="check"><input type="checkbox" id="pref-autoUpload"> Upload new clips automatically</label>
-      <label class="check"><input type="checkbox" id="pref-uploadClips"> Clips (instant replays, trims)</label>
-      <label class="check"><input type="checkbox" id="pref-uploadRecordings"> Recordings</label>
-      <label class="check"><input type="checkbox" id="pref-uploadScreenshots"> Screenshots</label>
-      <p class="muted small">Your clips always stay on your PC unless you chose otherwise in the Zyclipra app.</p>
-    </section>
-    <section class="card">
-      <div class="row between"><h2>Sync status</h2><button id="retry-all">Retry failed uploads</button></div>
-      <p id="cloud-summary" class="muted"></p>
-      <div id="cloud-queue"></div>
-    </section>
-  </main>
-
-  <main id="account-view" hidden>
-    <section class="card">
       <h2>Account &amp; security</h2>
       <p id="acc-user"></p>
       <p id="acc-hosting" class="muted small"></p>
-      <p id="acc-cloud" class="muted small"></p>
-    </section>
-    <div class="grid">
-      <section class="card">
-        <h2>Change password</h2>
+      <details>
+        <summary>Change password</summary>
         <form id="pw-form" class="stack">
           <label class="field">Current password<input id="pw-current" type="password" autocomplete="current-password" maxlength="200" required></label>
           <label class="field">New password<input id="pw-new" type="password" autocomplete="new-password" maxlength="200" required></label>
           <label class="field">Confirm new password<input id="pw-confirm" type="password" autocomplete="new-password" maxlength="200" required></label>
           <button type="submit" class="primary">Change password</button>
         </form>
-        <p class="muted small">Every other browser is signed out when the password changes.</p>
-      </section>
-      <section class="card">
-        <h2>Change username</h2>
+      </details>
+      <details>
+        <summary>Change username</summary>
         <form id="user-form" class="stack">
           <label class="field">New username<input id="user-new" autocomplete="username" maxlength="32" required></label>
           <label class="field">Current password<input id="user-pw" type="password" autocomplete="current-password" maxlength="200" required></label>
           <button type="submit">Change username</button>
         </form>
-      </section>
-    </div>
-    <section class="card">
-      <h2>Signed-in browsers</h2>
+      </details>
+      <h3>Signed-in browsers</h3>
       <div id="sessions"></div>
+      <button id="logout" class="ghost">Sign out</button>
     </section>
   </main>
 
+  <!-- Clip player -->
   <dialog id="player" aria-labelledby="player-title">
     <div class="player-head">
-      <div>
-        <p id="player-game" class="muted small caps"></p>
-        <h2 id="player-title"></h2>
-      </div>
+      <div><p id="player-game" class="muted small caps"></p><h2 id="player-title"></h2></div>
       <button id="player-close" class="ghost" aria-label="Close">✕</button>
     </div>
     <div id="player-media" class="player-media"></div>
     <p id="player-meta" class="muted small"></p>
     <p id="player-sync" class="small"></p>
-    <p id="player-desc"></p>
-    <div class="row">
+    <div class="row wrap">
       <a id="player-download" class="button primary" href="#" download>Download</a>
       <button id="player-upload">Upload to Google Drive</button>
-      <button id="player-prev">‹ Previous</button>
-      <button id="player-next">Next ›</button>
+      <button id="player-prev">‹</button>
+      <button id="player-next">›</button>
     </div>
   </dialog>
 
-  <div id="toast" class="toast" role="status"></div>
+  <!-- Sound editor -->
+  <dialog id="sound-edit" aria-labelledby="se-title">
+    <div class="player-head"><h2 id="se-title">Sound</h2><button id="se-close" class="ghost" aria-label="Close">✕</button></div>
+    <div class="gain" id="se-gain"></div>
+    <label class="field">Page<select id="se-page"></select></label>
+    <div class="row">
+      <label class="field">Colour<input id="se-color" type="color" value="#5B6CF9"></label>
+      <label class="field">Icon<input id="se-icon" maxlength="8" placeholder="🔥 or GG"></label>
+      <button id="se-nocolor" class="ghost">No colour</button>
+    </div>
+    <div class="row">
+      <button id="se-left">◀ Move earlier</button>
+      <button id="se-right">Move later ▶</button>
+    </div>
+    <p class="muted small">Rename sounds, loop them or set keyboard shortcuts in the Zyclipra app.</p>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
