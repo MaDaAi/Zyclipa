@@ -2,6 +2,12 @@
 
 _Last updated: 2026-11-09 · version 0.1.0_
 
+## Round 9 (2026-11-11): logos, clip from the dashboard, private remote access
+
+- **Logos**: the owner's "with background" design is the app icon (window, taskbar, installer `.ico`, dashboard favicon). The design without the background is the in-app logo, shown at the top of the rail and in the dashboard header. Sources are in `packaging/zyclipra.svg` and `packaging/zyclipra-logo.svg`.
+- **Clip from the dashboard**: the Clips page has a capture bar showing the replay/recording state, plus **⚡ Clip it (last N s)**, Record/Stop and Screenshot. If replay is off, the main button turns it on. New clips are fetched a few times after saving and get a "NEW" badge. Seen live with replay off; I didn't press Clip it, because that would record the screen. The save endpoint itself is unchanged from before.
+- **Away from home**: the dashboard now refuses any connection that isn't from loopback, a home network (RFC 1918 / link-local / IPv6 ULA) or a private VPN range (100.64.0.0/10, used by Tailscale). It stays private even if a router port is opened by mistake. With "Allow my phone and other devices" on, the Tailscale address is listed. Settings explains the three steps, with a "Get Tailscale" button. Test: `RemoteTest.onlyPrivateAddressesAreServed`. 36 tests pass, 9 skipped.
+
 ## Round 8 (2026-11-11): clips dashboard, editor full screen, Sonar-style Mic page, app icon, GitHub
 
 - **Clips dashboard** (web remote, now the first tab): search, game/type filters (videos, screenshots, favourites) and sorting. Clips are grouped by day with thumbnails, durations and favourite stars. A player plays the clip in the browser with seeking, details, Previous/Next and Download. New endpoints `GET /api/clip/thumb?id=` and `GET /api/clip/media?id=[&download=1]` need the signed-in session cookie. Ids must match `[A-Za-z0-9_-]{1,80}` and are looked up in the library, never used as paths. Only known media types are served, in 64 KB chunks with byte-range support. CSP gained `media-src 'self'`. Tested: `RemoteTest.clipMediaNeedsLoginAndSupportsRanges` (401 when signed out, 206 ranges, download header, path tricks refused). Also checked live against four real clips through a pinned-certificate local proxy in the in-app browser, at desktop and phone width.

@@ -55,6 +55,16 @@ public final class MainWindow {
         railBox.getStyleClass().add("rail");
         railBox.setMinWidth(76);
         railBox.setPrefWidth(76);
+        // The logo (without its background tile) at the top of the rail; the tiled version is the window icon.
+        try (var in = MainWindow.class.getResourceAsStream("/ui/logo-128.png")) {
+            if (in != null) {
+                javafx.scene.image.ImageView logo = new javafx.scene.image.ImageView(new javafx.scene.image.Image(in, 40, 40, true, true));
+                logo.setAccessibleText("Zyclipra");
+                StackPane logoBox = new StackPane(logo);
+                logoBox.getStyleClass().add("rail-logo");
+                railBox.getChildren().add(logoBox);
+            }
+        } catch (Exception ignored) { }
         int i = 1;
         for (View v : views.values()) {
             ToggleButton b = new ToggleButton(v.id().equals("settings") ? "" : v.title().replace("Audio Mixer", "Audio\nMixer"), Icons.of(v.icon(), 22));

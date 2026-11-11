@@ -149,6 +149,13 @@ class RemoteTest {
         assertEquals(429, post(c, "/api/login", "{\"code\":\"" + code + "\"}", null, true).statusCode(), "even the right code is refused while locked");
     }
 
+    @Test void onlyPrivateAddressesAreServed() throws Exception {
+        for (String ok : new String[]{"127.0.0.1", "::1", "192.168.1.20", "10.0.0.5", "172.20.1.1", "169.254.3.4", "100.101.102.103", "fd7a:115c:a1e0::1"})
+            assertTrue(DashboardServer.privateAddress(java.net.InetAddress.getByName(ok)), ok);
+        for (String bad : new String[]{"8.8.8.8", "100.128.0.1", "1.1.1.1", "172.32.0.1", "2001:4860:4860::8888"})
+            assertFalse(DashboardServer.privateAddress(java.net.InetAddress.getByName(bad)), bad);
+    }
+
     @Test void listensOnLoopbackOnlyByDefault() {
         assertFalse(cfg.lan);
         assertEquals(1, server.urls().size());

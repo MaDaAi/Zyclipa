@@ -122,6 +122,10 @@ let openIndex = -1;
 async function loadClips() {
     const clips = await api("clips?limit=all");
     const changed = JSON.stringify(clips.map(c => [c.id, c.title, c.favorite, c.sizeBytes])) !== JSON.stringify(allClips.map(c => [c.id, c.title, c.favorite, c.sizeBytes]));
+    if (knownIds.size > 0)
+        for (const c of clips)
+            if (!knownIds.has(c.id))
+                freshIds.add(c.id);
     allClips = clips;
     if (!changed && $("clip-groups").childElementCount > 0)
         return;
@@ -193,6 +197,8 @@ function card(c, index) {
         thumb.appendChild(el("span", "pill", fmtDur(c.durationSec)));
     if (c.favorite)
         thumb.appendChild(el("span", "star", "★"));
+    if (freshIds.has(c.id))
+        thumb.appendChild(el("span", "new", "NEW"));
     const body = el("div", "clip-body");
     body.append(el("span", "game caps", c.source || "Clip"), el("span", "title", c.title), el("span", "meta", ago(c.createdAt) + " · " + fmtBytes(c.sizeBytes)));
     b.append(thumb, body);
@@ -252,8 +258,50 @@ function stopMedia() {
     }
 }
 // ---------------- control ----------------
+let lastStatus;
+/** The capture bar on the Clips page: clip the last moments, record, or take a screenshot from your phone. */
+function paintCapture(s) {
+    const st = $("cap-state");
+    if (s.recording) {
+        text(st, "● Recording " + fmtDur(s.elapsedMs / 1000));
+        st.className = "cap-state rec";
+    }
+    else if (s.replay) {
+        text(st, "Instant replay on · " + s.replayAvailable + " s ready");
+        st.className = "cap-state live";
+    }
+    else {
+        text(st, "Instant replay is off");
+        st.className = "cap-state";
+    }
+    const clip = $("cap-clip");
+    text(clip, s.replay ? "⚡ Clip it (last " + Math.min(s.replayAvailable || s.replaySeconds, s.replaySeconds) + " s)" : "Turn on instant replay");
+    clip.disabled = !s.ffmpeg;
+    const rec = $("cap-rec");
+    text(rec, s.recording ? "■ Stop recording" : "● Record");
+    rec.disabled = !s.ffmpeg;
+}
+let knownIds = new Set();
+let freshIds = new Set();
+/** After saving, look for the new clip a few times (the desktop app needs a moment to write it). */
+function watchForNewClip() {
+    knownIds = new Set(allClips.map(c => c.id));
+    for (const ms of [2500, 5000, 8000, 12000])
+        window.setTimeout(() => loadClips().catch(() => undefined), ms);
+}
+function clipIt() {
+    if (!lastStatus)
+        return;
+    if (!lastStatus.replay) {
+        action("replay/toggle", "Instant replay is on – clip whenever something good happens");
+        return;
+    }
+    api("replay/save", {}).then(() => { toast("Clipped! It'll show up here in a moment."); watchForNewClip(); }).catch(e => toast(e.message, true));
+}
 async function refreshStatus() {
     const s = await api("status");
+    lastStatus = s;
+    paintCapture(s);
     const rec = $("rec-state");
     text(rec, s.recording ? "● REC " + fmtDur(s.elapsedMs / 1000) : s.recordingState === "IDLE" ? "Not recording" : s.recordingState.toLowerCase() + "…");
     rec.className = s.recording ? "big rec" : "big";
@@ -334,10 +382,9 @@ function start() {
         if (document.hidden)
             return;
         ticks++;
-        if (view === "control") {
-            refreshStatus().catch(() => undefined);
+        refreshStatus().catch(() => undefined);
+        if (view === "control")
             loadSounds().catch(() => undefined);
-        }
         else if (ticks % 8 === 0)
             loadClips().catch(() => undefined); // new clips appear within ~15 s
     }, 2000);
@@ -363,9 +410,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.key === "ArrowRight" && !(e.target instanceof HTMLVideoElement))
             openPlayer(openIndex + 1);
     });
+    $("cap-clip").addEventListener("click", clipIt);
+    $("cap-rec").addEventListener("click", () => { const was = lastStatus?.recording; action("recording/toggle", was ? "Recording stopped" : "Recording started"); if (was)
+        watchForNewClip(); });
+    $("cap-shot").addEventListener("click", () => { action("screenshot", "Screenshot taken"); watchForNewClip(); });
     $("rec-btn").addEventListener("click", () => action("recording/toggle", "Recording toggled"));
     $("replay-btn").addEventListener("click", () => action("replay/toggle", "Instant replay toggled"));
-    $("save-btn").addEventListener("click", () => action("replay/save", "Saving replay…"));
+    $("save-btn").addEventListener("click", () => { action("replay/save", "Saving replay…"); watchForNewClip(); });
     $("shot-btn").addEventListener("click", () => action("screenshot", "Screenshot taken"));
     $("stop-sounds").addEventListener("click", () => action("sounds/stop", "Sounds stopped"));
     $("logout").addEventListener("click", () => api("logout", {}).finally(showLogin));

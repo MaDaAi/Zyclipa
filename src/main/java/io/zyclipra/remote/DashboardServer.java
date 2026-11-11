@@ -98,15 +98,41 @@ public final class DashboardServer {
         try {
             for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
                 if (!ni.isUp() || ni.isLoopback() || ni.isVirtual()) continue;
-                for (InetAddress a : Collections.list(ni.getInetAddresses()))
-                    if (a instanceof java.net.Inet4Address && a.isSiteLocalAddress()) out.add("https://" + a.getHostAddress() + ":" + port());
+                for (InetAddress a : Collections.list(ni.getInetAddresses())) {
+                    if (!(a instanceof java.net.Inet4Address)) continue;
+                    if (a.isSiteLocalAddress()) out.add("https://" + a.getHostAddress() + ":" + port());
+                    else if (vpnAddress(a)) out.add("https://" + a.getHostAddress() + ":" + port() + " (away from home, via Tailscale)");
+                }
             }
         } catch (IOException ignored) { }
         return out;
     }
 
+    /**
+     * True for addresses that can only belong to this PC, your home network or a private VPN: loopback,
+     * 10/8, 172.16/12, 192.168/16, link-local, 100.64/10 (Tailscale and similar), and IPv6 fc00::/7.
+     * The dashboard refuses everything else, so it stays private even if a router port were opened by mistake.
+     */
+    public static boolean privateAddress(InetAddress a) {
+        if (a == null) return false;
+        if (a.isLoopbackAddress() || a.isSiteLocalAddress() || a.isLinkLocalAddress()) return true;
+        byte[] b = a.getAddress();
+        if (b.length == 4) return (b[0] & 0xff) == 100 && (b[1] & 0xc0) == 64;
+        return (b[0] & 0xfe) == 0xfc;
+    }
+
+    private static boolean vpnAddress(InetAddress a) {
+        byte[] b = a.getAddress();
+        return b.length == 4 && (b[0] & 0xff) == 100 && (b[1] & 0xc0) == 64;
+    }
+
     private void handle(HttpExchange ex) throws IOException {
         try {
+            if (!privateAddress(ex.getRemoteAddress().getAddress())) {
+                LOG.warning("dashboard: refused a connection from outside your network: " + ex.getRemoteAddress().getAddress().getHostAddress());
+                send(ex, 403, json("error", "Only devices on your own network or private VPN can open this."));
+                return;
+            }
             var h = ex.getResponseHeaders();
             h.add("X-Content-Type-Options", "nosniff");
             h.add("X-Frame-Options", "DENY");

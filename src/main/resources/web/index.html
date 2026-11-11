@@ -10,7 +10,7 @@
 </head>
 <body>
   <header>
-    <img src="/icon.png" alt="" class="logo" width="30" height="30">
+    <img src="/logo.png" alt="" class="logo" width="34" height="34">
     <h1>Zyclipra</h1>
     <nav id="nav" hidden>
       <button id="tab-clips" class="tab on" aria-pressed="true">Clips</button>
@@ -31,6 +31,13 @@
   </section>
 
   <main id="clips-view" hidden>
+    <section class="capture" aria-label="Capture">
+      <span id="cap-state" class="cap-state">–</span>
+      <span class="grow"></span>
+      <button id="cap-clip" class="primary big-btn">⚡ Clip it</button>
+      <button id="cap-rec" class="danger">● Record</button>
+      <button id="cap-shot">Screenshot</button>
+    </section>
     <div class="toolbar">
       <h2 class="page-title">All clips <span id="clip-count" class="muted"></span></h2>
       <span class="grow"></span>

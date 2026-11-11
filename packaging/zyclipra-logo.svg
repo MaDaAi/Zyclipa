@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="linear-gradient-1" x1="27.17652" y1="145.87396" x2="769.79736" y2="1082.58601" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff67f5"/>
+      <stop offset="0.36" stop-color="#9828f9"/>
+      <stop offset="0.68" stop-color="#4866ff"/>
+      <stop offset="1" stop-color="#00e8e5"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="159.82519" y1="368.51659" x2="280.01687" y2="368.51659" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff3ff"/>
+      <stop offset="1" stop-color="#c9ccff"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-3" x1="468.43567" y1="419.30133" x2="638.83401" y2="419.30133" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff3ff"/>
+      <stop offset="1" stop-color="#c9ccff"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-4" x1="895.42873" y1="694.3433" x2="775.23704" y2="694.3433" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff3ff"/>
+      <stop offset="1" stop-color="#c9ccff"/>
+    </linearGradient>
+  </defs>
+  <title>Artboard 1</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <path id="dark-plaque" d="M220.88986 286.93709 L844.53448 286.93709 C907.15802 286.93709 957.92441 334.96186 957.92441 394.20344 L957.92441 664.98557 C957.92441 724.22714 907.15802 772.25191 844.53448 772.25191 L220.88986 772.25191 C158.26633 772.25191 107.49993 724.22714 107.49993 664.98557 L107.49993 394.20344 C107.49993 334.96186 158.26633 286.93709 220.88986 286.93709 Z" fill="#10152f"/>
+    <path id="z-shadow" d="M118.40858 111.75621 C118.40858 111.75621 133.96116 111.75621 179.60357 111.75621 L984.43143 111.75621 C1025.00246 111.75621 1005.03101 168.16738 1005.03101 168.16738 L384.99442 801.66197 L984.78941 801.66197 L918.2924 914.72986 L78.93946 914.72986 C61.17175 914.72986 46.08799 907.63135 38.59977 895.74575 L38.59977 895.74575 C31.453 884.40212 35.41282 866.45809 47.93838 853.42757 L622.08139 256.13832 L115.70419 256.13832 C85.27592 256.13832 15.59268 256.13832 15.59268 256.13832 Z" fill="#0c1433" stroke="#0c1433" stroke-width="24" stroke-linejoin="round"/>
+    <path id="z-ribbon" d="M45.6179 195.06169 C73.00335 160.5664 125.74569 145.87396 173.41666 145.87396 L967.59462 145.87396 C989.90869 145.87396 994.98007 155.45599 982.80876 174.62004 L322.5152 826.78614 L958.46614 826.1977 C972.666 826.1977 973.68028 834.50213 961.50897 851.11097 L918.90938 908.60311 L98.6179 908.22102 C78.33239 908.22102 24.18279 894.56682 73.00335 843.87074 L713.51853 237.8614 L73.00335 237.8614 C51.70356 237.8614 32.43232 221.89136 45.6179 195.06169 Z" fill="url(#linear-gradient-1)"/>
+    <line id="z-top-highlight" x1="85.18821" y1="150.08894" x2="980.14843" y2="150.71996" fill="none" stroke="#ff8af9" stroke-width="10" stroke-linecap="round"/>
+    <line id="z-bottom-highlight" x1="325.65929" y1="825.24727" x2="967.31552" y2="825.24727" fill="none" stroke="#20f6f0" stroke-width="9" stroke-linecap="round"/>
+    <path id="viewfinder-left" d="M159.82519 493.08291 L159.82519 406.84469 C159.82519 381.29262 170.47509 368.51659 191.77488 368.51659 L280.01687 368.51659" fill="none" stroke="url(#linear-gradient-2)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+    <path id="play" d="M468.43567 436.37475 C468.43567 418.4883 474.52133 414.65549 486.69264 424.87632 L628.18411 536.0278 C642.38397 546.24863 642.38397 557.74706 628.18411 570.52309 L486.69264 681.67457 C474.52133 690.6178 468.43567 684.86858 468.43567 664.42693 Z" fill="url(#linear-gradient-3)" stroke="#10152f" stroke-width="20" stroke-linejoin="round"/>
+    <path id="viewfinder-left-2" data-name="viewfinder-left" d="M895.42873 569.77698 L895.42873 656.0152 C895.42873 681.56727 884.77883 694.3433 863.47904 694.3433 L775.23704 694.3433" fill="none" stroke="url(#linear-gradient-4)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="916.0714,913.97986 969.74558,817.39246 987.20608,818.2258" fill="#0c1433" stroke="#0c1433" stroke-miterlimit="10"/>
+    <polygon points="141.45052,138.38577 65.90933,240.13762 10.95124,242.39502 106.1666,109.9368" fill="#0c1433"/>
+  </g>
+</svg>

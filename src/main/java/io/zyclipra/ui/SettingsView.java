@@ -497,12 +497,21 @@ public final class SettingsView implements View {
         return pageBox("Remote Dashboard", "Optional: control recording, the mixer and the soundboard from your phone or another PC.",
                 Ui.settingRow("Remote dashboard", "Starts a secure (HTTPS) page you sign in to with a pairing code.",
                         Ui.toggleSwitch(r.enabled, "Remote dashboard", v -> { r.enabled = v; apply.run(); })),
-                Ui.settingRow("Allow my phone on the same Wi-Fi", "Off: only this PC can open it. Zyclipra never opens ports on your router.",
+                Ui.settingRow("Allow my phone and other devices", "Off: only this PC can open it. On: devices on your Wi-Fi or your Tailscale network. "
+                        + "Anything from the open internet is always refused, and Zyclipra never opens ports on your router.",
                         Ui.toggleSwitch(r.lan, "Allow home network", v -> { r.lan = v; apply.run(); })),
                 Ui.settingRow("Port", null, port),
                 spacer(16), Ui.row(12, newCode), code, state,
-                Ui.label("Your browser will warn once because the certificate is made on this PC – check that the fingerprint matches. "
-                        + "For access away from home use a VPN such as Tailscale instead of port forwarding.", "small", "muted"));
+                Ui.label("Your browser will warn once because the certificate is made on this PC – check that the fingerprint matches.", "small", "muted"),
+                spacer(16), Ui.label("Away from home", "settings-lead"),
+                Ui.label("Use a private network app instead of opening ports on your router – your dashboard then never faces the internet:\n"
+                        + "1.  Install Tailscale (free for personal use) on this PC and on your phone, and sign in to the same account on both.\n"
+                        + "2.  Turn on “Allow my phone and other devices” above.\n"
+                        + "3.  On your phone, open the address marked “via Tailscale” above and sign in with the pairing code.", "setting-desc"),
+                Ui.row(12, Ui.button("Get Tailscale", null, () -> {
+                    try { java.awt.Desktop.getDesktop().browse(java.net.URI.create("https://tailscale.com/download")); }
+                    catch (Exception e) { win.toast("Open tailscale.com/download in your browser.", false); }
+                }, "outline")));
     }
 
     private String dashState() {
