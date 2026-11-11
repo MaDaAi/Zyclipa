@@ -402,12 +402,7 @@ final class ClipEditor {
                 keep.setDisable(!used);
             }));
         }
-        if (ctx.settings.cloud.enabled) {
-            Button up = Ui.button(clip.driveFileId.isBlank() ? "Upload to Google Drive" : "On Google Drive ✓", Icons.CLOUD,
-                    () -> { ctx.sync.select(clip.id, true); ctx.sync.upload(clip); win.toast("Uploading…", false); });
-            up.setDisable(!ctx.sync.connected() || !clip.driveFileId.isBlank());
-            side.getChildren().add(panelSection("Google Drive", up));
-        }
+        side.getChildren().add(panelSection("Google Drive", new DriveSyncBox(ctx, win, clip).node()));
         side.getStyleClass().add("editor-side-box");
         return side;
     }

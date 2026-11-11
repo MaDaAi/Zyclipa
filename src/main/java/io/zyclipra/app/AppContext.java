@@ -74,8 +74,11 @@ public final class AppContext implements RemoteControl {
         mixer.setDryRun(!enableHotkeys);
         soundboard = new SoundboardService(store, paths.soundsDir(), capture::ffmpeg, bus);
         soundboard.setRecordingTap(() -> capture.tracks().soundboardFeed());
-        sync = new SyncService(store, library, bus, paths.tokenFile(), paths.root().resolve("sync-state.json"));
-        dashboardAuth = new DashboardAuth(settings.remote);
+        // The Google refresh token lives in Windows Credential Manager (falls back to a DPAPI-encrypted file).
+        sync = new SyncService(store, library, bus,
+                new io.zyclipra.cloud.CredentialStore("Zyclipra/google-drive", new SecretStore(paths.tokenFile())),
+                paths.root().resolve("google-avatar.jpg"), paths.root().resolve("sync-queue.json"));
+        dashboardAuth = new DashboardAuth(settings.remote, store::saveNow);
         dashboard = new DashboardServer(settings.remote, dashboardAuth, this, paths.keystore(),
                 new SecretStore(paths.root().resolve("dashboard-tls.key")));
         if (enableHotkeys) bindHotkeys();
@@ -202,6 +205,7 @@ public final class AppContext implements RemoteControl {
             o.addProperty("video", c.isVideo());
             o.addProperty("audioTracks", c.audioTracks);
             o.addProperty("description", c.description);
+            o.addProperty("sync", sync.stateOf(c.id));
             a.add(o);
         }
         return a;
@@ -248,10 +252,98 @@ public final class AppContext implements RemoteControl {
         return a;
     }
 
-    @Override public void toggleRecording() { recorder.toggle(); }
-    @Override public void toggleReplay() { replay.toggle(); }
-    @Override public void saveReplay() { replay.save(0); }
-    @Override public void screenshot() { screenshots.capture(); }
+    // ---- dashboard actions: they run on this PC and report what really happened
+
+    private static <T> T await(java.util.concurrent.Future<T> f, int seconds, String what) {
+        try { return f.get(seconds, java.util.concurrent.TimeUnit.SECONDS); }
+        catch (java.util.concurrent.TimeoutException e) { throw new IllegalStateException(what + " is taking longer than expected – check Zyclipra on the PC."); }
+        catch (java.util.concurrent.ExecutionException e) {
+            Throwable c = e.getCause() == null ? e : e.getCause();
+            throw new IllegalStateException(c.getMessage() == null ? what + " failed." : c.getMessage());
+        } catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(what + " was interrupted."); }
+    }
+
+    private static JsonObject result(String message) {
+        JsonObject o = new JsonObject();
+        o.addProperty("ok", message);
+        return o;
+    }
+
+    private static JsonObject clipJson(Clip c) {
+        JsonObject j = new JsonObject();
+        j.addProperty("id", c.id);
+        j.addProperty("title", c.title);
+        return j;
+    }
+
+    @Override public JsonElement toggleRecording() {
+        boolean wasRecording = recorder.state() != RecordingService.State.IDLE;
+        await(recorder.toggle(), 30, wasRecording ? "Stopping the recording" : "Starting the recording");
+        if (!wasRecording && recorder.state() != RecordingService.State.RECORDING)
+            throw new IllegalStateException(recorder.lastError().isBlank() ? "The recording didn't start." : recorder.lastError());
+        return result(wasRecording ? "Recording stopped and saved." : "Recording started on your PC.");
+    }
+
+    @Override public JsonElement toggleReplay() {
+        boolean was = replay.running();
+        await(replay.toggle(), 20, was ? "Turning instant replay off" : "Turning instant replay on");
+        if (!was && !replay.running()) throw new IllegalStateException("Instant replay didn't start" + (replay.lastError().isBlank() ? "." : ": " + replay.lastError()));
+        return result(was ? "Instant replay is off." : "Instant replay is on – press Clip it whenever something good happens.");
+    }
+
+    @Override public JsonElement saveReplay() {
+        Clip c = await(replay.save(0), 120, "Saving the clip");
+        JsonObject o = result("Clipped! “" + c.title + "” is saved on your PC" + (sync.stateOf(c.id).equals("local") ? "." : " and queued for Google Drive."));
+        o.add("clip", clipJson(c));
+        return o;
+    }
+
+    @Override public JsonElement screenshot() {
+        Clip c = await(screenshots.capture(), 30, "Taking the screenshot");
+        JsonObject o = result("Screenshot saved.");
+        o.add("clip", clipJson(c));
+        return o;
+    }
+
+    // ---- Google Drive for the dashboard (preferences it may change: automatic upload and which kinds)
+
+    @Override public JsonElement cloudStatus() { return sync.statusJson(); }
+
+    @Override public JsonElement cloudSettings(JsonObject changes) {
+        Settings.Cloud c = settings.cloud;
+        for (String k : changes.keySet()) {
+            if (!changes.get(k).isJsonPrimitive() || !changes.get(k).getAsJsonPrimitive().isBoolean()) throw new IllegalArgumentException(k + " must be true or false");
+            boolean v = changes.get(k).getAsBoolean();
+            switch (k) {
+                case "autoUpload" -> c.autoUpload = v;
+                case "uploadClips" -> c.uploadClips = v;
+                case "uploadRecordings" -> c.uploadRecordings = v;
+                case "uploadScreenshots" -> c.uploadScreenshots = v;
+                default -> throw new IllegalArgumentException("That setting can only be changed in the Zyclipra app.");
+            }
+        }
+        store.save();
+        bus.emit(EventBus.CLIPS_CHANGED, null);
+        return sync.statusJson();
+    }
+
+    @Override public JsonElement cloudUpload(String clipId) {
+        Clip c = library.byId(clipId).orElseThrow(() -> new IllegalArgumentException("unknown clip"));
+        return result(sync.upload(c));
+    }
+
+    @Override public JsonElement cloudRetry(String clipId) {
+        int n = sync.retry(clipId);
+        if (n == 0) throw new IllegalStateException(clipId == null ? "Nothing to retry." : "That clip isn't a failed upload.");
+        return result(n == 1 ? "Trying again." : "Trying " + n + " uploads again.");
+    }
+
+    @Override public JsonElement cloudCancel(String clipId) { return result(sync.cancel(clipId)); }
+
+    @Override public java.util.Optional<java.nio.file.Path> cloudAvatar() {
+        java.nio.file.Path p = sync.auth().avatar();
+        return p != null && java.nio.file.Files.isRegularFile(p) ? java.util.Optional.of(p) : java.util.Optional.empty();
+    }
     @Override public void setChannel(String id, double v, boolean m) { mixer.setChannel(id, v, m); }
     @Override public void playSound(String id) {
         if (soundboard.find(id).isEmpty()) throw new IllegalArgumentException("unknown sound");

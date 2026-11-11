@@ -1,6 +1,7 @@
 // Zyclipra remote dashboard. Talks only to the desktop app that served this page.
-// All calls send the X-Zyclipra header (CSRF protection) and rely on an HttpOnly session cookie.
-// Clip pictures and videos load from /api/clip/thumb and /api/clip/media, which need the same sign-in.
+// All calls send the X-Zyclipra header (CSRF protection) and rely on an HttpOnly session cookie –
+// nothing about the sign-in is kept in localStorage. Clip pictures and videos load from
+// /api/clip/thumb and /api/clip/media, which need the same sign-in. Google tokens never reach this page.
 
 interface Status {
   version: string; recording: boolean; recordingState: string; elapsedMs: number;
@@ -11,9 +12,22 @@ interface Status {
 interface ClipInfo {
   id: string; title: string; source: string; kind: string; createdAt: number; durationSec: number; sizeBytes: number;
   width: number; height: number; fps: number; favorite: boolean; video: boolean; audioTracks: number; description: string;
+  sync: string;
 }
 interface Channel { id: string; name: string; volume: number; muted: boolean; }
 interface Sound { id: string; name: string; category: string; playing: boolean; }
+interface QueueItem { id: string; title: string; category: string; state: string; done: number; size: number; error: string; updatedAt: number; }
+interface Cloud {
+  available: boolean; configured: boolean; connected: boolean; needsReauth: boolean; name: string; email: string; hasAvatar: boolean;
+  autoUpload: boolean; uploadClips: boolean; uploadRecordings: boolean; uploadScreenshots: boolean; keepLocal: boolean;
+  lastSyncAt: number; folder: string; folderUrl: string; problem: string; counts: Record<string, number>; queue: QueueItem[];
+}
+interface Session { id: string; created: number; lastSeen: number; address: string; agent: string; current: boolean; }
+interface Account {
+  username: string; sessions: Session[]; minPasswordLength: number;
+  hosting: { mode: string; lan: boolean; vpn: boolean; https: boolean; remote: boolean; publicUrl: string };
+}
+interface Result { ok?: string; error?: string; clip?: { id: string; title: string } }
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -24,7 +38,7 @@ async function api<T>(path: string, body?: object): Promise<T> {
     body: body ? JSON.stringify(body) : undefined,
     credentials: "same-origin",
   });
-  if (res.status === 401) { showLogin(); throw new Error("signed out"); }
+  if (res.status === 401 && path !== "login") { showLogin(); throw new Error("Please sign in."); }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data as T;
@@ -73,13 +87,19 @@ function toast(msg: string, error = false): void {
   const t = $("toast");
   text(t, msg);
   t.className = "toast show" + (error ? " error" : "");
-  window.setTimeout(() => (t.className = "toast"), 3000);
+  window.setTimeout(() => (t.className = "toast"), 3500);
 }
+
+const SYNC_LABEL: Record<string, string> = {
+  local: "Local only", queued: "Queued for Google Drive", uploading: "Uploading to Google Drive…", synced: "On Google Drive",
+  failed: "Upload failed", unavailable: "Cloud file unavailable", cloudOnly: "Only on Google Drive",
+};
+
+// ---------------- sign-in ----------------
 
 function showLogin(): void {
   $("login").hidden = false;
-  $("clips-view").hidden = true;
-  $("control-view").hidden = true;
+  for (const v of VIEWS) $(v + "-view").hidden = true;
   $("nav").hidden = true;
   $("logout").hidden = true;
   stopPolling();
@@ -89,15 +109,16 @@ function showApp(): void {
   $("login").hidden = true;
   $("nav").hidden = false;
   $("logout").hidden = false;
+  ($("password") as HTMLInputElement).value = "";
   showView(view);
   start();
 }
 
 async function login(ev: Event): Promise<void> {
   ev.preventDefault();
-  const code = ($("code") as HTMLInputElement).value;
   try {
-    await api("login", { code });
+    await api("login", { username: ($("username") as HTMLInputElement).value.trim(), password: ($("password") as HTMLInputElement).value });
+    text($("login-error"), "");
     showApp();
   } catch (e) {
     text($("login-error"), (e as Error).message);
@@ -106,17 +127,21 @@ async function login(ev: Event): Promise<void> {
 
 // ---------------- views ----------------
 
-let view: "clips" | "control" = "clips";
+const VIEWS = ["clips", "control", "cloud", "account"] as const;
+type View = typeof VIEWS[number];
+let view: View = "clips";
 
-function showView(v: "clips" | "control"): void {
+function showView(v: View): void {
   view = v;
-  $("clips-view").hidden = v !== "clips";
-  $("control-view").hidden = v !== "control";
-  for (const [id, on] of [["tab-clips", v === "clips"], ["tab-control", v === "control"]] as const) {
-    $(id).className = on ? "tab on" : "tab";
-    $(id).setAttribute("aria-pressed", String(on));
+  for (const x of VIEWS) {
+    $(x + "-view").hidden = x !== v;
+    $("tab-" + x).className = x === v ? "tab on" : "tab";
+    $("tab-" + x).setAttribute("aria-pressed", String(x === v));
   }
   if (v === "clips") loadClips().catch(() => undefined);
+  if (v === "control") refreshStatus().catch(() => undefined);
+  if (v === "cloud") loadCloud().catch(e => toast(e.message, true));
+  if (v === "account") loadAccount().catch(e => toast(e.message, true));
 }
 
 let timer: number | undefined;
@@ -133,11 +158,14 @@ function stopPolling(): void {
 let allClips: ClipInfo[] = [];
 let shown: ClipInfo[] = [];
 let openIndex = -1;
+let knownIds = new Set<string>();
+const freshIds = new Set<string>();
 
 async function loadClips(): Promise<void> {
   const clips = await api<ClipInfo[]>("clips?limit=all");
-  const changed = JSON.stringify(clips.map(c => [c.id, c.title, c.favorite, c.sizeBytes])) !== JSON.stringify(allClips.map(c => [c.id, c.title, c.favorite, c.sizeBytes]));
   if (knownIds.size > 0) for (const c of clips) if (!knownIds.has(c.id)) freshIds.add(c.id);
+  const sig = (l: ClipInfo[]) => JSON.stringify(l.map(c => [c.id, c.title, c.favorite, c.sizeBytes, c.sync]));
+  const changed = sig(clips) !== sig(allClips);
   allClips = clips;
   if (!changed && $("clip-groups").childElementCount > 0) return;
   const game = $("game") as HTMLSelectElement;
@@ -146,6 +174,7 @@ async function loadClips(): Promise<void> {
   game.replaceChildren(new Option("All games", ""), ...games.map(g => new Option(g, g)));
   game.value = games.includes(current) ? current : "";
   renderClips();
+  if (($("player") as HTMLDialogElement).open && shown[openIndex]) paintPlayerSync(shown[openIndex]);
 }
 
 function filtered(): ClipInfo[] {
@@ -156,7 +185,8 @@ function filtered(): ClipInfo[] {
   const list = allClips.filter(c =>
     (!q || c.title.toLowerCase().includes(q) || c.source.toLowerCase().includes(q) || c.description.toLowerCase().includes(q))
     && (!game || c.source === game)
-    && (kind === "" || (kind === "video" && c.video) || (kind === "screenshot" && !c.video) || (kind === "favorite" && c.favorite)));
+    && (kind === "" || (kind === "video" && c.video) || (kind === "screenshot" && !c.video) || (kind === "favorite" && c.favorite)
+      || (kind === "local" && c.sync !== "synced") || (kind === "synced" && c.sync === "synced")));
   const by: Record<string, (a: ClipInfo, b: ClipInfo) => number> = {
     new: (a, b) => b.createdAt - a.createdAt,
     old: (a, b) => a.createdAt - b.createdAt,
@@ -169,23 +199,24 @@ function filtered(): ClipInfo[] {
 function renderClips(): void {
   shown = filtered();
   const total = allClips.reduce((s, c) => s + c.sizeBytes, 0);
+  const synced = allClips.filter(c => c.sync === "synced").length;
   text($("clip-count"), "(" + allClips.length + ")");
-  text($("clip-stats"), allClips.length === 0 ? "" : `${fmtBytes(total)} of clips` + (shown.length !== allClips.length ? ` · showing ${shown.length}` : ""));
+  text($("clip-stats"), allClips.length === 0 ? "" : `${fmtBytes(total)} of clips on your PC · ${synced} on Google Drive` + (shown.length !== allClips.length ? ` · showing ${shown.length}` : ""));
   const box = $("clip-groups");
   box.replaceChildren();
   if (shown.length === 0) {
-    box.appendChild(el("p", "empty muted", allClips.length === 0 ? "No clips yet. Record or save an instant replay in Zyclipra and it shows up here." : "No clips match."));
+    box.appendChild(el("p", "empty muted", allClips.length === 0 ? "No clips yet. Press Clip it (with instant replay on) or record, and it shows up here." : "No clips match."));
     return;
   }
-  const byTime = ($("sort") as HTMLSelectElement).value === "new" || ($("sort") as HTMLSelectElement).value === "old";
+  const sort = ($("sort") as HTMLSelectElement).value;
+  const byTime = sort === "new" || sort === "old";
   let grid: HTMLElement | null = null;
   let lastDay = "";
   shown.forEach((c, i) => {
     const day = byTime ? dayLabel(c.createdAt) : "";
     if (!grid || day !== lastDay) {
       if (byTime) {
-        const sameDay = shown.filter(x => dayLabel(x.createdAt) === day);
-        const games = Array.from(new Set(sameDay.map(x => x.source))).join(" & ");
+        const games = Array.from(new Set(shown.filter(x => dayLabel(x.createdAt) === day).map(x => x.source))).join(" & ");
         const h = el("h3", "day");
         h.append(el("span", "", day), el("span", "muted", " " + games));
         box.appendChild(h);
@@ -198,9 +229,15 @@ function renderClips(): void {
   });
 }
 
+function syncBadge(state: string): HTMLElement {
+  const b = el("span", "sync sync-" + state, state === "synced" ? "☁ ✓" : state === "uploading" ? "☁ ↑" : state === "queued" ? "☁ …" : state === "failed" ? "☁ !" : "☁ ✕");
+  b.title = SYNC_LABEL[state] || state;
+  return b;
+}
+
 function card(c: ClipInfo, index: number): HTMLElement {
   const b = el("button", "clip-card");
-  b.setAttribute("aria-label", "Open " + c.title);
+  b.setAttribute("aria-label", "Open " + c.title + " (" + (SYNC_LABEL[c.sync] || "") + ")");
   const thumb = el("div", "thumb");
   const img = el("img");
   img.alt = "";
@@ -211,6 +248,7 @@ function card(c: ClipInfo, index: number): HTMLElement {
   if (c.video) thumb.appendChild(el("span", "pill", fmtDur(c.durationSec)));
   if (c.favorite) thumb.appendChild(el("span", "star", "★"));
   if (freshIds.has(c.id)) thumb.appendChild(el("span", "new", "NEW"));
+  if (c.sync !== "local") thumb.appendChild(syncBadge(c.sync));
   const body = el("div", "clip-body");
   body.append(el("span", "game caps", c.source || "Clip"), el("span", "title", c.title),
     el("span", "meta", ago(c.createdAt) + " · " + fmtBytes(c.sizeBytes)));
@@ -232,9 +270,7 @@ function openPlayer(index: number): void {
     v.autoplay = true;
     v.preload = "metadata";
     v.src = src;
-    v.addEventListener("error", () => {
-      media.replaceChildren(el("p", "muted", "This browser can't play this file" + (c.kind === "screenshot" ? "." : " here – use Download to watch it.")));
-    });
+    v.addEventListener("error", () => media.replaceChildren(el("p", "muted", "This browser can't play this file here – use Download to watch it.")));
     media.replaceChildren(v);
   } else {
     const i = el("img");
@@ -248,14 +284,35 @@ function openPlayer(index: number): void {
   if (c.video) parts.push(fmtDur(c.durationSec));
   if (c.height) parts.push(c.height + "p" + (c.fps ? " " + Math.round(c.fps) + " FPS" : ""));
   parts.push(fmtBytes(c.sizeBytes));
-  if (c.video && c.audioTracks > 1) parts.push(c.audioTracks + " sound tracks");
+  if (c.video && c.audioTracks > 1) parts.push(c.audioTracks + " sound tracks (the browser plays the first; Download has them all)");
   text($("player-meta"), parts.join(" · "));
   text($("player-desc"), c.description || "");
   ($("player-download") as HTMLAnchorElement).href = src + "&download=1";
   ($("player-prev") as HTMLButtonElement).disabled = index <= 0;
   ($("player-next") as HTMLButtonElement).disabled = index >= shown.length - 1;
+  paintPlayerSync(c);
   const d = $("player") as HTMLDialogElement;
   if (!d.open) d.showModal();
+}
+
+function paintPlayerSync(c: ClipInfo): void {
+  const s = $("player-sync");
+  text(s, "Google Drive: " + (SYNC_LABEL[c.sync] || c.sync));
+  s.className = "small sync-text-" + c.sync;
+  const b = $("player-upload") as HTMLButtonElement;
+  b.hidden = c.sync === "synced" || c.sync === "uploading";
+  text(b, c.sync === "queued" ? "Cancel upload" : c.sync === "failed" || c.sync === "unavailable" ? "Retry upload" : "Upload to Google Drive");
+}
+
+async function playerSyncAction(): Promise<void> {
+  const c = shown[openIndex];
+  if (!c) return;
+  try {
+    const path = c.sync === "queued" ? "cloud/cancel" : c.sync === "failed" || c.sync === "unavailable" ? "cloud/retry" : "cloud/upload";
+    const r = await api<Result>(path, { id: c.id });
+    toast(r.ok || "Done");
+    await loadClips();
+  } catch (e) { toast((e as Error).message, true); }
 }
 
 function stopMedia(): void {
@@ -263,7 +320,7 @@ function stopMedia(): void {
   if (v) { v.pause(); v.removeAttribute("src"); v.load(); }
 }
 
-// ---------------- control ----------------
+// ---------------- capture + control ----------------
 
 let lastStatus: Status | undefined;
 
@@ -281,19 +338,32 @@ function paintCapture(s: Status): void {
   rec.disabled = !s.ffmpeg;
 }
 
-let knownIds = new Set<string>();
-let freshIds = new Set<string>();
-
 /** After saving, look for the new clip a few times (the desktop app needs a moment to write it). */
 function watchForNewClip(): void {
   knownIds = new Set(allClips.map(c => c.id));
-  for (const ms of [2500, 5000, 8000, 12000]) window.setTimeout(() => loadClips().catch(() => undefined), ms);
+  for (const ms of [1000, 3000, 6000, 10000, 15000]) window.setTimeout(() => loadClips().catch(() => undefined), ms);
+}
+
+/** Runs an action on the PC and shows exactly what the desktop app answered. */
+async function action(path: string, busy: HTMLButtonElement | null, then?: () => void): Promise<void> {
+  if (busy) busy.disabled = true;
+  try {
+    const r = await api<Result>(path, {});
+    toast(r.ok || "Done");
+    if (then) then();
+  } catch (e) {
+    toast((e as Error).message, true);
+  } finally {
+    if (busy) busy.disabled = false;
+    refreshStatus().catch(() => undefined);
+  }
 }
 
 function clipIt(): void {
   if (!lastStatus) return;
-  if (!lastStatus.replay) { action("replay/toggle", "Instant replay is on – clip whenever something good happens"); return; }
-  api("replay/save", {}).then(() => { toast("Clipped! It'll show up here in a moment."); watchForNewClip(); }).catch(e => toast(e.message, true));
+  const b = $("cap-clip") as HTMLButtonElement;
+  if (!lastStatus.replay) { action("replay/toggle", b); return; }
+  action("replay/save", b, watchForNewClip);
 }
 
 async function refreshStatus(): Promise<void> {
@@ -364,9 +434,119 @@ async function loadSounds(): Promise<void> {
   }
 }
 
-function action(path: string, ok: string): void {
-  api(path, {}).then(() => { toast(ok); window.setTimeout(refreshStatus, 900); window.setTimeout(loadClips, 2500); }).catch(e => toast(e.message, true));
+// ---------------- cloud & sync ----------------
+
+const PREFS = ["autoUpload", "uploadClips", "uploadRecordings", "uploadScreenshots"] as const;
+
+async function loadCloud(): Promise<void> {
+  const c = await api<Cloud>("cloud");
+  const avatar = $("cloud-avatar") as HTMLImageElement;
+  avatar.hidden = !c.hasAvatar;
+  if (c.hasAvatar && !avatar.src) avatar.src = "/api/cloud/avatar";
+  if (!c.available) { text($("cloud-account"), "Google Drive isn't available in this version."); return; }
+  text($("cloud-title"), c.connected ? (c.name || "Google Drive") : "Google Drive");
+  text($("cloud-account"), c.connected ? "● Connected as " + c.email : c.needsReauth
+    ? "Google asked Zyclipra to sign in again. Open Zyclipra on your PC › Settings › Cloud & Sync › Reconnect."
+    : "Not connected. Connect your Google account in the Zyclipra app on your PC (Settings › Cloud & Sync).");
+  $("cloud-account").className = c.connected ? "ok-text" : c.needsReauth ? "warn-text" : "muted";
+  const folder = $("cloud-folder") as HTMLAnchorElement;
+  folder.hidden = !c.connected;
+  folder.href = c.folderUrl;
+  text($("cloud-note"), "Clips on Google Drive go to My Drive › " + c.folder + " › Clips, Recordings and Screenshots. "
+    + (c.keepLocal ? "Clips also stay on your PC." : "After a verified upload, clips are moved off your PC (set in the app)."));
+  for (const p of PREFS) {
+    const box = $("pref-" + p) as HTMLInputElement;
+    box.checked = c[p];
+    box.disabled = p !== "autoUpload" && !c.autoUpload;
+  }
+  const n = (k: string) => c.counts[k] || 0;
+  text($("cloud-summary"), `${n("synced")} synced · ${n("queued") + n("uploading")} waiting · ${n("failed")} failed`
+    + (n("unavailable") ? ` · ${n("unavailable")} missing from Drive` : "")
+    + " · last upload " + (c.lastSyncAt ? ago(c.lastSyncAt) : "never") + (c.problem ? " · " + c.problem : ""));
+  ($("retry-all") as HTMLButtonElement).disabled = n("failed") + n("unavailable") === 0;
+  const q = $("cloud-queue");
+  q.replaceChildren();
+  if (c.queue.length === 0) { q.appendChild(el("p", "muted small", "Nothing waiting.")); return; }
+  for (const i of c.queue) {
+    const row = el("div", "q-row");
+    const info = el("div", "grow");
+    info.append(el("strong", "", i.title), el("span", "muted small q-state sync-text-" + i.state,
+      (SYNC_LABEL[i.state] || i.state) + (i.state === "uploading" ? " " + fmtBytes(i.done) + " / " + fmtBytes(i.size) : "") + (i.error ? " – " + i.error : "")));
+    row.appendChild(info);
+    if (i.state === "uploading") {
+      const bar = el("progress") as HTMLProgressElement;
+      bar.max = Math.max(1, i.size);
+      bar.value = i.done;
+      row.appendChild(bar);
+    }
+    if (i.state === "failed" || i.state === "unavailable") {
+      const b = el("button", "", "Retry");
+      b.addEventListener("click", () => api<Result>("cloud/retry", { id: i.id }).then(r => { toast(r.ok || ""); loadCloud(); }).catch(e => toast(e.message, true)));
+      row.appendChild(b);
+    }
+    if (i.state === "queued" || i.state === "uploading" || i.state === "failed") {
+      const b = el("button", "ghost", "Cancel");
+      b.addEventListener("click", () => api<Result>("cloud/cancel", { id: i.id }).then(r => { toast(r.ok || ""); loadCloud(); }).catch(e => toast(e.message, true)));
+      row.appendChild(b);
+    }
+    q.appendChild(row);
+  }
 }
+
+// ---------------- account ----------------
+
+async function loadAccount(): Promise<void> {
+  const a = await api<Account>("account");
+  text($("acc-user"), "Signed in as " + a.username);
+  const h = a.hosting;
+  const where = h.mode === "public" ? "the internet through your own HTTPS reverse proxy (" + h.publicUrl + ")"
+    : ["this PC", h.lan ? "your home network" : "", h.vpn ? "your Tailscale network" : ""].filter(x => x).join(", ");
+  text($("acc-hosting"), "Hosting: reachable from " + where + ". Encrypted (HTTPS). Change this in the Zyclipra app › Settings › Hosting.");
+  api<Cloud>("cloud").then(c => text($("acc-cloud"), "Google Drive: " + (c.connected ? "connected as " + c.email : c.needsReauth ? "needs reconnecting" : "not connected")))
+    .catch(() => undefined);
+  ($("pw-new") as HTMLInputElement).minLength = a.minPasswordLength;
+  ($("pw-new") as HTMLInputElement).placeholder = "at least " + a.minPasswordLength + " characters";
+  ($("user-new") as HTMLInputElement).value = a.username;
+  const box = $("sessions");
+  box.replaceChildren();
+  for (const s of a.sessions) {
+    const row = el("div", "q-row");
+    const info = el("div", "grow");
+    info.append(el("strong", "", s.address + (s.current ? " (this browser)" : "")), el("span", "muted small q-state",
+      "signed in " + ago(s.created) + " · last used " + ago(s.lastSeen) + (s.agent ? " · " + s.agent.slice(0, 80) : "")));
+    row.appendChild(info);
+    if (!s.current) {
+      const b = el("button", "", "Sign out");
+      b.addEventListener("click", () => api<Result>("account/revoke", { id: s.id }).then(r => { toast(r.ok || ""); loadAccount(); }).catch(e => toast(e.message, true)));
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+  }
+}
+
+async function changePassword(ev: Event): Promise<void> {
+  ev.preventDefault();
+  const f = (id: string) => ($(id) as HTMLInputElement);
+  try {
+    const r = await api<Result>("account/password", { current: f("pw-current").value, password: f("pw-new").value, confirm: f("pw-confirm").value });
+    toast(r.ok || "Password changed");
+    for (const id of ["pw-current", "pw-new", "pw-confirm"]) f(id).value = "";
+    loadAccount();
+  } catch (e) { toast((e as Error).message, true); }
+}
+
+async function changeUsername(ev: Event): Promise<void> {
+  ev.preventDefault();
+  const f = (id: string) => ($(id) as HTMLInputElement);
+  try {
+    const r = await api<Result>("account/username", { current: f("user-pw").value, username: f("user-new").value.trim() });
+    toast(r.ok || "Username changed");
+    f("user-pw").value = "";
+    loadAccount();
+  } catch (e) { toast((e as Error).message, true); }
+}
+
+// ---------------- start ----------------
 
 function start(): void {
   refreshStatus().catch(() => undefined);
@@ -380,15 +560,15 @@ function start(): void {
     ticks++;
     refreshStatus().catch(() => undefined);
     if (view === "control") loadSounds().catch(() => undefined);
-    else if (ticks % 8 === 0) loadClips().catch(() => undefined); // new clips appear within ~15 s
+    else if (view === "cloud") loadCloud().catch(() => undefined);
+    else if (view === "clips" && ticks % 5 === 0) loadClips().catch(() => undefined); // new clips and sync states within ~10 s
   }, 2000);
   levelTimer = window.setInterval(() => { if (!document.hidden && view === "control") refreshLevels().catch(() => undefined); }, 250);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   $("login-form").addEventListener("submit", login);
-  $("tab-clips").addEventListener("click", () => showView("clips"));
-  $("tab-control").addEventListener("click", () => { showView("control"); refreshStatus().catch(() => undefined); });
+  for (const v of VIEWS) $("tab-" + v).addEventListener("click", () => showView(v));
   for (const id of ["search", "game", "kind", "sort"]) $(id).addEventListener("input", renderClips);
   const d = $("player") as HTMLDialogElement;
   d.addEventListener("close", stopMedia);
@@ -396,18 +576,28 @@ document.addEventListener("DOMContentLoaded", () => {
   $("player-close").addEventListener("click", () => d.close());
   $("player-prev").addEventListener("click", () => openPlayer(openIndex - 1));
   $("player-next").addEventListener("click", () => openPlayer(openIndex + 1));
+  $("player-upload").addEventListener("click", playerSyncAction);
   d.addEventListener("keydown", e => {
     if (e.key === "ArrowLeft" && !(e.target instanceof HTMLVideoElement)) openPlayer(openIndex - 1);
     if (e.key === "ArrowRight" && !(e.target instanceof HTMLVideoElement)) openPlayer(openIndex + 1);
   });
   $("cap-clip").addEventListener("click", clipIt);
-  $("cap-rec").addEventListener("click", () => { const was = lastStatus?.recording; action("recording/toggle", was ? "Recording stopped" : "Recording started"); if (was) watchForNewClip(); });
-  $("cap-shot").addEventListener("click", () => { action("screenshot", "Screenshot taken"); watchForNewClip(); });
-  $("rec-btn").addEventListener("click", () => action("recording/toggle", "Recording toggled"));
-  $("replay-btn").addEventListener("click", () => action("replay/toggle", "Instant replay toggled"));
-  $("save-btn").addEventListener("click", () => { action("replay/save", "Saving replay…"); watchForNewClip(); });
-  $("shot-btn").addEventListener("click", () => action("screenshot", "Screenshot taken"));
-  $("stop-sounds").addEventListener("click", () => action("sounds/stop", "Sounds stopped"));
+  $("cap-rec").addEventListener("click", () => { const was = lastStatus?.recording; action("recording/toggle", $("cap-rec") as HTMLButtonElement, was ? watchForNewClip : undefined); });
+  $("cap-shot").addEventListener("click", () => action("screenshot", $("cap-shot") as HTMLButtonElement, watchForNewClip));
+  $("rec-btn").addEventListener("click", () => action("recording/toggle", $("rec-btn") as HTMLButtonElement));
+  $("replay-btn").addEventListener("click", () => action("replay/toggle", $("replay-btn") as HTMLButtonElement));
+  $("save-btn").addEventListener("click", () => action("replay/save", $("save-btn") as HTMLButtonElement, watchForNewClip));
+  $("shot-btn").addEventListener("click", () => action("screenshot", $("shot-btn") as HTMLButtonElement, watchForNewClip));
+  $("stop-sounds").addEventListener("click", () => action("sounds/stop", null));
+  for (const p of PREFS) $("pref-" + p).addEventListener("change", () => {
+    api<Cloud>("cloud/settings", { [p]: ($("pref-" + p) as HTMLInputElement).checked }).then(() => { toast("Saved"); loadCloud(); }).catch(e => { toast(e.message, true); loadCloud(); });
+  });
+  $("retry-all").addEventListener("click", () => api<Result>("cloud/retry", {}).then(r => { toast(r.ok || ""); loadCloud(); }).catch(e => toast(e.message, true)));
+  $("pw-form").addEventListener("submit", changePassword);
+  $("user-form").addEventListener("submit", changeUsername);
   $("logout").addEventListener("click", () => api("logout", {}).finally(showLogin));
+  api<{ configured: boolean }>("setup").then(s => {
+    if (!s.configured) text($("login-hint"), "The dashboard isn't set up yet. In Zyclipra on your PC, open Settings › Hosting and create a username and password.");
+  }).catch(() => undefined);
   api<Status>("status").then(showApp).catch(() => undefined);
 });

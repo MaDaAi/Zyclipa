@@ -39,7 +39,7 @@ import java.util.List;
 final class TlsCertificates {
     private TlsCertificates() {}
 
-    record Tls(SSLContext context, String fingerprint) { }
+    record Tls(SSLContext context, String fingerprint, String pem) { }
 
     static Tls load(Path keystore, io.zyclipra.cloud.SecretStore pass) throws Exception {
         String pw = pass.load();
@@ -60,7 +60,9 @@ final class TlsCertificates {
         ctx.init(kmf.getKeyManagers(), null, new SecureRandom());
         X509Certificate cert = (X509Certificate) ks.getCertificate("zyclipra");
         String fp = HexFormat.ofDelimiter(":").withUpperCase().formatHex(MessageDigest.getInstance("SHA-256").digest(cert.getEncoded()));
-        return new Tls(ctx, fp);
+        String pem = "-----BEGIN CERTIFICATE-----\n" + java.util.Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(cert.getEncoded())
+                + "\n-----END CERTIFICATE-----\n";
+        return new Tls(ctx, fp, pem);
     }
 
     private static KeyStore create(String pw) throws Exception {

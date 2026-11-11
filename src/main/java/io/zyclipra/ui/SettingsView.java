@@ -61,8 +61,8 @@ public final class SettingsView implements View {
         group(list, "CLIPS", "Capture and Sound", this::capture);
         link(list, "Clip Settings", this::clipSettings);
         link(list, "Shortcuts", this::shortcuts);
-        group(list, "CONNECT", "Google Drive", this::cloud);
-        link(list, "Remote Dashboard", this::dashboard);
+        group(list, "CONNECT", "Cloud & Sync", this::cloud);
+        link(list, "Hosting", this::dashboard);
         group(list, "", "About and Privacy", this::about);
         ScrollPane navScroll = new ScrollPane(list);
         navScroll.setFitToWidth(true);
@@ -395,128 +395,386 @@ public final class SettingsView implements View {
         return Hotkey.parse(s).map(Hotkey::text).orElse(s);
     }
 
-    // ---------------- Google Drive ----------------
+    // ---------------- Cloud & Sync (Google Drive) ----------------
     private Node cloud() {
         Settings.Cloud c = ctx.settings.cloud;
-        Label state = Ui.label(cloudState(), "h3");
+        io.zyclipra.cloud.SyncService sync = ctx.sync;
+        boolean connected = sync.connected();
+
+        // --- account
+        VBox account = Ui.section("Google account", null);
+        if (connected) {
+            HBox who = new HBox(14);
+            who.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+            java.nio.file.Path pic = sync.auth().avatar();
+            if (pic != null && java.nio.file.Files.isRegularFile(pic)) {
+                javafx.scene.image.ImageView iv = new javafx.scene.image.ImageView(new javafx.scene.image.Image(pic.toUri().toString(), 48, 48, true, true));
+                javafx.scene.shape.Circle mask = new javafx.scene.shape.Circle(24, 24, 24);
+                iv.setClip(mask);
+                who.getChildren().add(iv);
+            }
+            who.getChildren().add(new VBox(2, Ui.label(c.accountName.isBlank() ? "Connected" : c.accountName, "h3"),
+                    Ui.label(c.accountEmail, "small", "muted"), Ui.label("● Connected to Google Drive", "small", "ok-text")));
+            Button disconnect = Ui.button("Disconnect", null, () -> {
+                javafx.scene.control.Alert a = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.CONFIRMATION,
+                        "Zyclipra stops uploading and forgets the Google sign-in on this PC. Nothing is deleted: clips on this PC and copies on Google Drive stay where they are.",
+                        javafx.scene.control.ButtonType.OK, javafx.scene.control.ButtonType.CANCEL);
+                a.setTitle("Disconnect Google Drive");
+                a.setHeaderText("Disconnect " + (c.accountEmail.isBlank() ? "Google Drive" : c.accountEmail) + "?");
+                ClipsView.style(a.getDialogPane());
+                if (a.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL) != javafx.scene.control.ButtonType.OK) return;
+                java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    try { sync.disconnect(); Ui.fx(() -> { win.toast("Google Drive disconnected.", false); open("Cloud & Sync"); }); }
+                    catch (Exception e) { Ui.fx(() -> win.toast("Disconnect: " + e.getMessage(), true)); }
+                });
+            }, "outline");
+            account.getChildren().add(Ui.row(12, who, Ui.grow(), disconnect));
+        } else {
+            Label st = Ui.label(c.needsReauth
+                    ? "Google asked Zyclipra to sign in again (the saved sign-in was revoked or expired" + (c.accountEmail.isBlank() ? "" : " for " + c.accountEmail) + "). Uploads are paused until you reconnect."
+                    : "Not connected. Everything works without Google Drive – it's only an optional backup.", "setting-desc");
+            if (c.needsReauth) st.getStyleClass().setAll("label", "warn-text");
+            Button connect = Ui.button(c.needsReauth ? "Reconnect Google account" : "Connect Google account", Icons.CLOUD, () -> { }, "primary");
+            connect.setOnAction(e -> {
+                connect.setDisable(true);
+                st.setText("Finish signing in in your browser… (this window waits up to 5 minutes)");
+                sync.auth().signIn(url -> DriveSyncBox.browse(url)).whenComplete((email, err) -> Ui.fx(() -> {
+                    save();
+                    if (err != null) {
+                        connect.setDisable(false);
+                        String m = err.getCause() != null ? err.getCause().getMessage() : err.getMessage();
+                        st.setText("Google sign-in didn't finish: " + m);
+                        win.toast("Google sign-in failed: " + m, true);
+                    } else {
+                        win.toast("Connected" + (email.isBlank() ? "" : " as " + email), false);
+                        open("Cloud & Sync");
+                    }
+                }));
+            });
+            connect.setDisable(c.clientId.isBlank());
+            account.getChildren().addAll(st, Ui.row(12, connect, c.clientId.isBlank() ? Ui.label("First fill in the Google Cloud setup below.", "small", "muted") : Ui.grow()));
+        }
+
+        // --- one-time Google Cloud setup
         TextField clientId = new TextField(c.clientId);
         clientId.setPromptText("xxxxxxxx.apps.googleusercontent.com");
         clientId.textProperty().addListener((o, a, b) -> { c.clientId = b.trim(); save(); });
         PasswordField secret = new PasswordField();
         secret.setText(c.clientSecret);
-        secret.setPromptText("Only if Google shows one for your Desktop client");
+        secret.setPromptText("The client secret Google shows for the Desktop client");
         secret.textProperty().addListener((o, a, b) -> { c.clientSecret = b.trim(); save(); });
         TextField folder = new TextField(c.folderName);
-        folder.textProperty().addListener((o, a, b) -> { c.folderName = b; save(); });
-        Button connect = Ui.button("Connect Google account", Icons.CLOUD, () -> {
-            state.setText("Finish signing in in your browser…");
-            ctx.sync.auth().signIn(url -> {
-                try { java.awt.Desktop.getDesktop().browse(java.net.URI.create(url)); }
-                catch (Exception e) { Ui.fx(() -> state.setText("Open this address in your browser: " + url)); }
-            }).whenComplete((email, e) -> Ui.fx(() -> {
-                save();
-                if (e != null) win.toast("Google sign-in failed: " + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()), true);
-                else win.toast("Connected" + (email.isBlank() ? "" : " as " + email), false);
-                state.setText(cloudState());
-            }));
-        }, "primary");
-        Button upload = Ui.button("Upload my chosen clips now", Icons.SHARE, () -> ctx.sync.syncSelected());
-        Button disconnect = Ui.button("Disconnect", null, () -> {
-            try { ctx.sync.disconnect(); win.toast("Google account disconnected.", false); } catch (Exception e) { win.toast(e.getMessage(), true); }
-            state.setText(cloudState());
-        }, "outline");
-        VBox remoteList = new VBox(6);
-        Button test = Ui.button("Test connection", Icons.REFRESH, () -> {
-            state.setText("Checking your Google Drive…");
-            remoteList.getChildren().clear();
-            ctx.sync.freeSpace().thenCombine(ctx.sync.remote(), (free, files) -> new Object[]{free, files}).whenComplete((res, e) -> Ui.fx(() -> {
-                if (e != null) { state.setText("Connection failed: " + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage())); return; }
-                long free = (Long) res[0];
-                @SuppressWarnings("unchecked") List<io.zyclipra.cloud.DriveClient.RemoteFile> files = (List<io.zyclipra.cloud.DriveClient.RemoteFile>) res[1];
-                state.setText("Connected ✓  " + files.size() + " clip(s) in “" + c.folderName + "”" + (free >= 0 ? " · " + Ui.bytes(free) + " free on Drive" : ""));
-                for (var f : files) {
-                    javafx.scene.control.ProgressBar pb = new javafx.scene.control.ProgressBar(0);
-                    pb.setPrefWidth(120);
-                    pb.setVisible(false);
-                    Button dl = Ui.button("Download", null, () -> { }, "outline");
-                    dl.setOnAction(ev -> {
-                        dl.setDisable(true);
-                        pb.setVisible(true);
-                        ctx.sync.download(f, p -> Ui.fx(() -> pb.setProgress(p))).whenComplete((path, err) -> Ui.fx(() -> {
-                            if (err != null) { win.toast("Download failed: " + err.getMessage(), true); dl.setDisable(false); }
-                            else win.toast("Downloaded to " + path, false);
-                        }));
-                    });
-                    HBox row = Ui.row(10, Ui.label(f.name(), "h3"), Ui.label(Ui.bytes(f.size()), "small", "muted"), Ui.grow(), pb, dl);
-                    row.getStyleClass().add("shortcut-row");
-                    remoteList.getChildren().add(row);
-                }
-            }));
-        }, "outline");
-        VBox details = new VBox(12,
-                Ui.row(12, Ui.field("Google OAuth client ID", clientId)), Ui.row(12, Ui.field("Client secret (optional)", secret), Ui.field("Drive folder name", folder)),
-                Ui.row(10, connect, test, upload, Ui.grow(), disconnect), state, remoteList,
-                Ui.label("How to get a client ID (free, 5 minutes): open console.cloud.google.com, create a project, turn on the Google Drive API, "
-                        + "then create an OAuth client of type “Desktop app” and paste its ID here. Full steps are in the README.", "small", "muted"));
-        details.setDisable(!c.enabled);
-        return pageBox("Google Drive", "Optional: back up the clips you choose to your own Google Drive.",
-                Ui.settingRow("Google Drive sync", "Only clips you pick are uploaded – never settings, logs or sounds. Zyclipra can only see files it created.",
-                        sw(c.enabled, "Google Drive sync", v -> { c.enabled = v; details.setDisable(!v); state.setText(cloudState()); })),
-                spacer(16), details);
+        folder.textProperty().addListener((o, a, b) -> { if (!b.isBlank() && b.length() <= 80 && !b.contains("/")) { c.folderName = b.trim(); save(); } });
+        VBox setupBody = new VBox(12,
+                Ui.label("Zyclipra doesn't come with Google keys of its own, so you make a free one-time “OAuth client” in your Google account:\n"
+                        + "1.  Open console.cloud.google.com, create a project and enable the Google Drive API.\n"
+                        + "2.  OAuth consent screen: choose External, add your own Google address under Test users.\n"
+                        + "3.  Credentials › Create credentials › OAuth client ID › Desktop app. Paste the client ID and secret here.\n"
+                        + "Google says a Desktop client's secret isn't confidential; it's still only kept in your settings on this PC.", "small", "muted"),
+                Ui.row(12, Ui.field("OAuth client ID", clientId), Ui.field("Client secret", secret)),
+                Ui.row(12, Ui.field("Folder name on Google Drive", folder)),
+                Ui.row(12, Ui.button("Open Google Cloud console", null, () -> DriveSyncBox.browse("https://console.cloud.google.com/apis/credentials"), "outline")));
+        javafx.scene.control.TitledPane setup = new javafx.scene.control.TitledPane("Google Cloud setup (one time)", setupBody);
+        setup.setExpanded(c.clientId.isBlank());
+        setup.getStyleClass().add("plain-titled");
+
+        // --- what gets uploaded
+        VBox prefs = Ui.section("Automatic upload", sw(c.autoUpload, "Automatic upload", v -> { c.autoUpload = v; save(); }));
+        prefs.getChildren().addAll(
+                Ui.label("New clips are copied to Google Drive as soon as they're saved – including ones you clip from the dashboard. "
+                        + "Older clips stay local unless you upload them yourself (clip menu › Upload to Google Drive).", "small", "muted"),
+                Ui.settingRow("Clips", "Instant replays and trimmed clips", sw(c.uploadClips, "Upload clips", v -> { c.uploadClips = v; save(); })),
+                Ui.settingRow("Recordings", "Recordings you started and stopped", sw(c.uploadRecordings, "Upload recordings", v -> { c.uploadRecordings = v; save(); })),
+                Ui.settingRow("Screenshots", null, sw(c.uploadScreenshots, "Upload screenshots", v -> { c.uploadScreenshots = v; save(); })));
+
+        ToggleButton keep = sw(c.keepLocal, "Keep local copies", v -> { });
+        keep.selectedProperty().addListener((o, a, b) -> {
+            if (b == c.keepLocal) return;
+            if (!b) {
+                javafx.scene.control.Alert al = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING,
+                        "After each upload is verified (same size and checksum as on this PC), the clip on this PC goes to the Recycle Bin to save space. "
+                                + "It's then only on Google Drive (you can download it back from this page). Clips that aren't uploaded are never touched.",
+                        javafx.scene.control.ButtonType.OK, javafx.scene.control.ButtonType.CANCEL);
+                al.setTitle("Free up space after upload");
+                al.setHeaderText("Remove clips from this PC after they're on Google Drive?");
+                ClipsView.style(al.getDialogPane());
+                if (al.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL) != javafx.scene.control.ButtonType.OK) { keep.setSelected(true); return; }
+            }
+            c.keepLocal = b;
+            save();
+        });
+        VBox storage = Ui.section("Where your clips are", null);
+        storage.getChildren().addAll(
+                Ui.settingRow("On this PC (your main library)", ctx.settings.recording.clipsDir + "\nRecording, instant replay and screenshots always work here, even offline.", Ui.grow()),
+                Ui.settingRow("On Google Drive (backup copies)", "My Drive › " + c.folderName + " › Clips, Recordings, Screenshots",
+                        Ui.button("Open in Google Drive", Icons.CLOUD, () -> DriveSyncBox.browse(sync.folderUrl()), "outline")),
+                Ui.settingRow("Keep clips on this PC after uploading", "On (recommended): uploading never removes anything from this PC.", keep));
+
+        // --- status and queue (live)
+        VBox status = Ui.section("Sync status", null);
+        VBox queue = new VBox(6);
+        Label summary = Ui.label("", "setting-desc");
+        Runnable fill = () -> fillQueue(queue, summary);
+        fill.run();
+        Button retryAll = Ui.button("Retry failed uploads", Icons.REPLAY, () -> { int n = sync.retry(null); win.toast(n == 0 ? "Nothing to retry." : "Retrying " + n + ".", false); fill.run(); }, "outline");
+        Button check = Ui.button("Check cloud copies", Icons.REFRESH, () -> java.util.concurrent.CompletableFuture.supplyAsync(sync::verifyCloudCopies)
+                .thenAccept(n -> Ui.fx(() -> { win.toast(n == 0 ? "All synced clips are still on Google Drive." : n + " clip(s) are no longer on Google Drive.", n > 0); fill.run(); })), "outline");
+        check.setDisable(!connected);
+        status.getChildren().addAll(summary, Ui.row(10, retryAll, check), queue);
+        Runnable[] unsub = {() -> { }};
+        javafx.animation.PauseTransition throttle = new javafx.animation.PauseTransition(javafx.util.Duration.millis(300));
+        throttle.setOnFinished(e -> fill.run());
+        status.sceneProperty().addListener((o, a, b) -> {
+            unsub[0].run();
+            if (b != null) unsub[0] = sync.onChange(i -> Ui.fx(throttle::playFromStart));
+        });
+
+        return pageBox("Cloud & Sync", "Optional: keep copies of your clips on your own Google Drive. Zyclipra can only see files it created there.",
+                account, spacer(14), setup, spacer(14), prefs, spacer(14), storage, spacer(14), status);
     }
 
-    private String cloudState() {
-        Settings.Cloud c = ctx.settings.cloud;
-        if (!c.enabled) return "Off – nothing leaves this PC.";
-        if (!ctx.sync.connected()) return "Not connected yet.";
-        return "Connected" + (c.accountEmail.isBlank() ? "" : " as " + c.accountEmail) + " · " + c.selectedClips.size() + " clip(s) chosen for sync";
+    private void fillQueue(VBox queue, Label summary) {
+        io.zyclipra.cloud.SyncService sync = ctx.sync;
+        com.google.gson.JsonObject st = sync.statusJson();
+        com.google.gson.JsonObject counts = st.getAsJsonObject("counts");
+        java.util.function.Function<String, Integer> n = k -> counts.has(k) ? counts.get(k).getAsInt() : 0;
+        long last = ctx.settings.cloud.lastSyncAt;
+        summary.setText(n.apply("synced") + " synced · " + (n.apply("queued") + n.apply("uploading")) + " waiting · " + n.apply("failed") + " failed"
+                + (n.apply("unavailable") > 0 ? " · " + n.apply("unavailable") + " missing from Drive" : "")
+                + "\nLast successful upload: " + (last == 0 ? "never" : java.time.format.DateTimeFormatter.ofPattern("MMM d, h:mm a", java.util.Locale.ENGLISH)
+                .withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.ofEpochMilli(last)))
+                + (sync.lastProblem().isBlank() ? "" : "\nLast problem: " + sync.lastProblem()));
+        queue.getChildren().clear();
+        for (io.zyclipra.cloud.SyncService.Item i : sync.items()) {
+            boolean cloudOnly = io.zyclipra.cloud.SyncService.SYNCED.equals(i.state) && ctx.library.byId(i.clipId).isEmpty();
+            if (io.zyclipra.cloud.SyncService.SYNCED.equals(i.state) && !cloudOnly) continue;
+            String label = switch (i.state) {
+                case "queued" -> "Queued" + (i.error.isBlank() ? "" : " – " + i.error);
+                case "uploading" -> "Uploading " + Ui.bytes(i.done) + " / " + Ui.bytes(Math.max(1, i.size));
+                case "failed" -> "Failed – " + i.error;
+                case "unavailable" -> "Cloud file unavailable – deleted from Google Drive";
+                default -> "On Google Drive only" + (i.localRemoved ? " (moved off this PC after upload)" : "");
+            };
+            Label l = Ui.label(label, "small", i.state.equals("failed") ? "danger-text" : i.state.equals("unavailable") ? "warn-text" : "muted");
+            HBox row = Ui.row(10, new VBox(2, Ui.label(i.title, "h3"), l), Ui.grow());
+            if (i.state.equals("uploading")) {
+                javafx.scene.control.ProgressBar pb = new javafx.scene.control.ProgressBar(i.done / (double) Math.max(1, i.size));
+                pb.setPrefWidth(160);
+                row.getChildren().add(pb);
+            }
+            if (i.state.equals("failed") || i.state.equals("unavailable"))
+                row.getChildren().add(Ui.button(i.state.equals("failed") ? "Retry" : "Upload again", Icons.REPLAY, () -> { sync.retry(i.clipId); fillQueue(queue, summary); }, "outline"));
+            if (i.state.equals("queued") || i.state.equals("uploading") || i.state.equals("failed"))
+                row.getChildren().add(Ui.button("Cancel", null, () -> { try { sync.cancel(i.clipId); } catch (IllegalStateException ignored) { } fillQueue(queue, summary); }, "ghost"));
+            if (cloudOnly) {
+                javafx.scene.control.ProgressBar pb = new javafx.scene.control.ProgressBar(0);
+                pb.setPrefWidth(120);
+                pb.setVisible(false);
+                Button dl = Ui.button("Download to this PC", null, () -> { }, "outline");
+                dl.setOnAction(e -> {
+                    dl.setDisable(true);
+                    pb.setVisible(true);
+                    sync.download(i.clipId, p -> Ui.fx(() -> pb.setProgress(p))).whenComplete((path, err) -> Ui.fx(() -> {
+                        if (err != null) { win.toast("Download failed: " + (err.getCause() != null ? err.getCause().getMessage() : err.getMessage()), true); dl.setDisable(false); }
+                        else { win.toast("Downloaded to " + path, false); fillQueue(queue, summary); }
+                    }));
+                });
+                row.getChildren().addAll(pb, dl);
+            }
+            row.getStyleClass().add("shortcut-row");
+            queue.getChildren().add(row);
+        }
+        if (queue.getChildren().isEmpty()) queue.getChildren().add(Ui.label("Nothing waiting. Clips you upload appear here while they upload.", "small", "muted"));
     }
 
-    // ---------------- Remote Dashboard ----------------
+    // ---------------- Hosting (remote dashboard) ----------------
     private Node dashboard() {
         Settings.Remote r = ctx.settings.remote;
-        Label code = Ui.label("", "h1");
-        Label state = Ui.label(dashState(), "setting-desc");
-        Runnable apply = () -> {
-            ctx.dashboard.stop();
-            if (r.enabled) {
-                if (!ctx.dashboardAuth.hasCode()) code.setText("Pairing code: " + ctx.dashboardAuth.newPairingCode());
-                try { ctx.dashboard.start(); } catch (Exception e) { win.toast("The dashboard couldn't start: " + e.getMessage(), true); }
+        io.zyclipra.remote.DashboardServer server = ctx.dashboard;
+        io.zyclipra.remote.DashboardAuth auth = ctx.dashboardAuth;
+
+        // --- status
+        VBox status = Ui.section("Dashboard status", null);
+        boolean running = server.running();
+        Label state = Ui.label(running ? "● Running" : "● Stopped", "h3");
+        state.getStyleClass().add(running ? "ok-text" : "muted");
+        status.getChildren().add(state);
+        if (!server.lastError().isBlank() && !running) status.getChildren().add(Ui.label(server.lastError(), "small", "danger-text"));
+        if (running) {
+            for (io.zyclipra.remote.DashboardServer.Url u : server.addresses()) {
+                Button copy = Ui.button("Copy", null, () -> {
+                    javafx.scene.input.ClipboardContent cc = new javafx.scene.input.ClipboardContent();
+                    cc.putString(u.url());
+                    javafx.scene.input.Clipboard.getSystemClipboard().setContent(cc);
+                    win.toast("Address copied", false);
+                }, "outline");
+                Button openB = Ui.button("Open", null, () -> DriveSyncBox.browse(u.url()), "outline");
+                HBox row = Ui.row(10, new VBox(2, Ui.label(u.kind(), "small", "muted"), Ui.label(u.url(), "h3")), Ui.grow(), copy, openB);
+                row.getStyleClass().add("shortcut-row");
+                status.getChildren().add(row);
             }
-            save();
-            state.setText(dashState());
-        };
+            status.getChildren().add(Ui.label("Encrypted (HTTPS). The certificate is made on this PC, so browsers warn once – check the fingerprint matches:\n"
+                    + server.fingerprint(), "small", "muted"));
+        }
         Spinner<Integer> port = new Spinner<>(1024, 65535, r.port);
         port.setEditable(true);
         port.valueProperty().addListener((o, a, b) -> { r.port = b; save(); });
-        Button newCode = Ui.button("Make a new pairing code", Icons.KEY, () -> {
-            code.setText("Pairing code: " + ctx.dashboardAuth.newPairingCode());
-            save();
-            win.toast("New code made. Browsers that were signed in must sign in again.", false);
-        }, "outline");
-        return pageBox("Remote Dashboard", "Optional: control recording, the mixer and the soundboard from your phone or another PC.",
-                Ui.settingRow("Remote dashboard", "Starts a secure (HTTPS) page you sign in to with a pairing code.",
-                        Ui.toggleSwitch(r.enabled, "Remote dashboard", v -> { r.enabled = v; apply.run(); })),
-                Ui.settingRow("Allow my phone and other devices", "Off: only this PC can open it. On: devices on your Wi-Fi or your Tailscale network. "
-                        + "Anything from the open internet is always refused, and Zyclipra never opens ports on your router.",
-                        Ui.toggleSwitch(r.lan, "Allow home network", v -> { r.lan = v; apply.run(); })),
-                Ui.settingRow("Port", null, port),
-                spacer(16), Ui.row(12, newCode), code, state,
-                Ui.label("Your browser will warn once because the certificate is made on this PC – check that the fingerprint matches.", "small", "muted"),
-                spacer(16), Ui.label("Away from home", "settings-lead"),
-                Ui.label("Use a private network app instead of opening ports on your router – your dashboard then never faces the internet:\n"
-                        + "1.  Install Tailscale (free for personal use) on this PC and on your phone, and sign in to the same account on both.\n"
-                        + "2.  Turn on “Allow my phone and other devices” above.\n"
-                        + "3.  On your phone, open the address marked “via Tailscale” above and sign in with the pairing code.", "setting-desc"),
-                Ui.row(12, Ui.button("Get Tailscale", null, () -> {
-                    try { java.awt.Desktop.getDesktop().browse(java.net.URI.create("https://tailscale.com/download")); }
-                    catch (Exception e) { win.toast("Open tailscale.com/download in your browser.", false); }
-                }, "outline")));
-    }
+        Runnable startNow = () -> {
+            try { server.restart(); r.enabled = true; save(); win.toast("Dashboard running", false); }
+            catch (Exception e) { r.enabled = false; save(); win.toast("The dashboard couldn't start: " + e.getMessage(), true); }
+            open("Hosting");
+        };
+        Button start = Ui.button(running ? "Restart" : "Start dashboard", Icons.PLAY, startNow::run, "primary");
+        start.setDisable(!auth.configured());
+        Button stop = Ui.button("Stop", Icons.STOP, () -> { server.stop(); r.enabled = false; save(); open("Hosting"); }, "outline");
+        stop.setDisable(!running);
+        status.getChildren().addAll(Ui.row(12, Ui.label("Port", "h3"), port, Ui.label(running && port.getValue() != server.port() ? "Restart to use the new port" : "", "small", "muted"),
+                Ui.grow(), start, stop));
+        if (!auth.configured()) status.getChildren().add(Ui.label("Create the dashboard sign-in below before starting it.", "small", "warn-text"));
 
-    private String dashState() {
-        if (!ctx.dashboard.running()) return "Off.";
-        return "Open " + String.join("  or  ", ctx.dashboard.urls()) + "\nCertificate fingerprint: " + ctx.dashboard.fingerprint();
+        // --- sign-in (account & security)
+        VBox security = Ui.section("Dashboard sign-in", null);
+        if (!auth.configured()) {
+            TextField user = new TextField();
+            user.setPromptText("username");
+            PasswordField pw = new PasswordField(), pw2 = new PasswordField();
+            pw.setPromptText("at least " + auth.minPasswordLength() + " characters");
+            pw2.setPromptText("type it again");
+            Label err = Ui.label("", "small", "danger-text");
+            Button create = Ui.button("Create sign-in", Icons.KEY, () -> {
+                try {
+                    auth.setCredentials(user.getText().trim(), pw.getText(), pw2.getText());
+                    win.toast("Dashboard sign-in created. You can start the dashboard now.", false);
+                    open("Hosting");
+                } catch (IllegalArgumentException e) { err.setText(e.getMessage()); }
+            }, "primary");
+            security.getChildren().addAll(
+                    Ui.label("There's no default account. Choose the username and password the dashboard will ask for. "
+                            + "The password is stored only as a secure hash (Argon2id).", "small", "muted"),
+                    Ui.row(12, Ui.field("Username", user), Ui.field("Password", pw), Ui.field("Confirm password", pw2)), err, Ui.row(12, create));
+        } else {
+            PasswordField cur = new PasswordField(), np = new PasswordField(), np2 = new PasswordField();
+            cur.setPromptText("current password");
+            np.setPromptText("new password");
+            np2.setPromptText("new password again");
+            Label err = Ui.label("", "small", "danger-text");
+            Button change = Ui.button("Change password", Icons.KEY, () -> {
+                try { auth.changePassword(null, cur.getText(), np.getText(), np2.getText()); win.toast("Password changed. All browsers must sign in again.", false); open("Hosting"); }
+                catch (RuntimeException e) { err.setText(e.getMessage()); }
+            }, "outline");
+            TextField newUser = new TextField(auth.username());
+            PasswordField cur2 = new PasswordField();
+            cur2.setPromptText("current password");
+            Button rename = Ui.button("Change username", null, () -> {
+                try { auth.changeUsername(cur2.getText(), newUser.getText().trim()); win.toast("Username changed.", false); open("Hosting"); }
+                catch (RuntimeException e) { err.setText(e.getMessage()); }
+            }, "outline");
+            VBox sessions = new VBox(6);
+            for (io.zyclipra.remote.DashboardAuth.SessionInfo s : auth.sessions()) {
+                String when = java.time.format.DateTimeFormatter.ofPattern("MMM d, h:mm a", java.util.Locale.ENGLISH).withZone(java.time.ZoneId.systemDefault())
+                        .format(java.time.Instant.ofEpochMilli(s.lastSeen()));
+                HBox row = Ui.row(10, new VBox(2, Ui.label(s.address() + " · last used " + when, "h3"), Ui.label(s.agent(), "small", "muted")), Ui.grow(),
+                        Ui.button("Sign out", null, () -> { auth.revoke(s.id()); open("Hosting"); }, "outline"));
+                row.getStyleClass().add("shortcut-row");
+                sessions.getChildren().add(row);
+            }
+            if (sessions.getChildren().isEmpty()) sessions.getChildren().add(Ui.label("No browser is signed in right now.", "small", "muted"));
+            security.getChildren().addAll(
+                    Ui.label("Signed-in user: " + auth.username() + " · sessions end after 12 hours unused or 7 days at most", "setting-desc"),
+                    Ui.row(12, Ui.field("Current password", cur), Ui.field("New password", np), Ui.field("Confirm", np2), change),
+                    Ui.row(12, Ui.field("New username", newUser), Ui.field("Current password", cur2), rename), err,
+                    spacer(6), Ui.row(10, Ui.label("Active sessions", "h3"), Ui.grow(),
+                            Ui.button("Sign out everywhere", null, () -> { auth.revokeAll(); win.toast("Every browser was signed out.", false); open("Hosting"); }, "outline")),
+                    sessions);
+        }
+
+        // --- who can connect
+        boolean pub = "public".equals(r.mode);
+        VBox access = Ui.section("Who can open the dashboard", null);
+        Runnable restartIfRunning = () -> {
+            save();
+            if (server.running()) { try { server.restart(); } catch (Exception e) { win.toast("Restart failed: " + e.getMessage(), true); } }
+            open("Hosting");
+        };
+        List<String> ts = io.zyclipra.remote.DashboardServer.tailscaleAddresses();
+        ToggleButton lanSw = sw(r.lan, "Home network", v -> { r.lan = v; restartIfRunning.run(); });
+        ToggleButton vpnSw = sw(r.vpn, "Private VPN", v -> { r.vpn = v; restartIfRunning.run(); });
+        lanSw.setDisable(pub);
+        vpnSw.setDisable(pub);
+        access.getChildren().addAll(
+                Ui.settingRow("This PC", "Always allowed (https://localhost).", Ui.label("On", "small", "ok-text")),
+                Ui.settingRow("Devices on my home network", "Phones and PCs on the same Wi-Fi or router. Off by default.", lanSw),
+                Ui.settingRow("Private VPN – Tailscale (recommended for away from home)",
+                        (ts.isEmpty() ? "Tailscale isn't running on this PC. " : "Tailscale found: " + String.join(", ", ts) + ". ")
+                                + "Your phone and PC join one private network; the dashboard never faces the internet.", vpnSw));
+        if (ts.isEmpty()) access.getChildren().add(Ui.row(10, Ui.label("1. Install Tailscale on this PC and your phone  2. Sign in to the same account on both  3. Turn on the switch above",
+                "small", "muted"), Ui.grow(), Ui.button("Get Tailscale", null, () -> DriveSyncBox.browse("https://tailscale.com/download"), "outline")));
+        access.getChildren().add(Ui.label("Any other address is refused. Zyclipra never opens router ports, never uses UPnP or NAT-PMP and never changes the firewall.", "small", "muted"));
+
+        // --- advanced: public
+        VBox adv = new VBox(10);
+        TextField url = new TextField(r.publicUrl);
+        url.setPromptText("https://clips.example.com");
+        PasswordField confirmPw = new PasswordField();
+        confirmPw.setPromptText("your dashboard password");
+        Label advState = Ui.label(pub ? "● Public access is ON through " + r.publicUrl : "Off (recommended).", "h3");
+        advState.getStyleClass().add(pub ? "warn-text" : "muted");
+        Label advErr = Ui.label("", "small", "danger-text");
+        Button turnOn = Ui.button("Check address and turn on", null, () -> { }, "outline");
+        turnOn.setOnAction(e -> {
+            advErr.setText("");
+            if (!server.running()) { advErr.setText("Start the dashboard first – the check goes through your reverse proxy to it."); return; }
+            if (!auth.passwordMatches(confirmPw.getText())) { advErr.setText("That isn't the dashboard password."); return; }
+            if (confirmPw.getText().length() < 12) { advErr.setText("Public access needs a dashboard password of at least 12 characters. Change it above first."); return; }
+            String norm;
+            try { norm = io.zyclipra.remote.PublicAccess.normalise(url.getText()); } catch (IllegalArgumentException ex) { advErr.setText(ex.getMessage()); return; }
+            turnOn.setDisable(true);
+            advErr.setText("Checking " + norm + " …");
+            java.util.concurrent.CompletableFuture.supplyAsync(() -> io.zyclipra.remote.PublicAccess.verify(norm, server.instanceId())).thenAccept(problem -> Ui.fx(() -> {
+                turnOn.setDisable(false);
+                if (problem != null) { advErr.setText(problem); return; }
+                r.publicUrl = norm;
+                r.publicVerifiedAt = System.currentTimeMillis();
+                r.mode = "public";
+                r.lan = false;
+                r.vpn = false;
+                win.toast("Public access is on. Keep your password strong and Zyclipra updated.", false);
+                restartIfRunning.run();
+            }));
+        });
+        Button turnOff = Ui.button("Turn public access off", null, () -> { r.mode = "local"; r.publicVerifiedAt = 0; restartIfRunning.run(); }, "outline");
+        turnOff.setDisable(!pub);
+        Button export = Ui.button("Save dashboard certificate (.pem)", null, () -> {
+            if (server.certificatePem().isBlank()) { win.toast("Start the dashboard once first.", true); return; }
+            javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
+            fc.setInitialFileName("zyclipra-dashboard.pem");
+            java.io.File f = fc.showSaveDialog(node.getScene().getWindow());
+            if (f == null) return;
+            try { java.nio.file.Files.writeString(f.toPath(), server.certificatePem()); win.toast("Saved " + f, false); }
+            catch (Exception ex) { win.toast(ex.getMessage(), true); }
+        }, "outline");
+        adv.getChildren().addAll(
+                Ui.label("⚠ Not recommended. This puts your recording controls and clips on the internet, where anyone can try to sign in. "
+                        + "Private VPN (above) gives the same away-from-home access without that risk. Only continue if you know how to run a server.", "warn-text"),
+                Ui.label("You do all of this yourself – Zyclipra never changes your router, firewall or DNS:\n"
+                        + "1.  Get a domain name that points to your home IP address (dynamic DNS is fine).\n"
+                        + "2.  Run an HTTPS reverse proxy on this PC (for example Caddy) with a real certificate, forwarding to https://localhost:" + r.port + ".\n"
+                        + "    Have it trust this dashboard's own certificate (save it with the button below) and keep the Host header.\n"
+                        + "3.  Forward port 443 on your router to this PC and allow it in Windows Firewall.\n"
+                        + "4.  Enter the address and your dashboard password here. Zyclipra checks that the address reaches this app with a trusted certificate before turning it on.\n"
+                        + "While public access is on, the dashboard only listens on this PC (for the proxy), and home-network/VPN access are switched off.", "small", "muted"),
+                advState, Ui.row(12, Ui.field("Public address", url), Ui.field("Dashboard password", confirmPw)), advErr, Ui.row(10, turnOn, turnOff, Ui.grow(), export));
+        javafx.scene.control.TitledPane advanced = new javafx.scene.control.TitledPane("Advanced: public internet through your own reverse proxy", adv);
+        advanced.setExpanded(pub);
+        advanced.getStyleClass().add("plain-titled");
+
+        VBox external = Ui.section("External hosting", null);
+        external.getChildren().add(Ui.label("Hosting the dashboard on a website (instead of on this PC) isn't available in this version. It would need a secure, "
+                + "authenticated relay between that website and this PC, and Zyclipra won't expose its recording controls without one. "
+                + "Use Private VPN for access away from home.", "small", "muted"));
+
+        return pageBox("Hosting", "The dashboard lets you clip, record and manage your clips from your phone or another PC. It runs on this PC and is off until you start it.",
+                status, spacer(14), security, spacer(14), access, spacer(14), advanced, spacer(14), external);
     }
 
     // ---------------- About ----------------

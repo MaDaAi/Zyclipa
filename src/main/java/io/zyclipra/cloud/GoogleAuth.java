@@ -7,6 +7,7 @@ import io.zyclipra.core.Log;
 import io.zyclipra.core.Settings;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -16,6 +17,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,43 +28,57 @@ import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 /**
- * Google sign-in for installed apps: OAuth 2.0 authorization code flow with PKCE and a
- * loopback redirect (http://127.0.0.1:random-port). No client secret is shipped with
- * Zyclipra: the user creates their own free OAuth client (Desktop type) and pastes its id.
- * Scope is drive.file, so Zyclipra can only see files it created itself.
+ * Google sign-in for installed apps: OAuth 2.0 authorization code flow with PKCE (S256), opened in the
+ * user's own browser, with a one-time loopback redirect (http://127.0.0.1:random-port). Zyclipra ships no
+ * client id or secret: the user creates a free "Desktop app" OAuth client and pastes its id (and the
+ * secret Google shows with it, which Google documents as not confidential for desktop apps).
+ * Scopes: openid, email, profile (name and picture) and drive.file (only files Zyclipra made itself).
+ * The refresh token is kept in Windows Credential Manager; access tokens live only in memory.
  */
 public final class GoogleAuth {
     private static final Logger LOG = Log.get(GoogleAuth.class);
-    public static final String AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
-    public static final String TOKEN = "https://oauth2.googleapis.com/token";
-    public static final String REVOKE = "https://oauth2.googleapis.com/revoke";
-    public static final String SCOPES = "https://www.googleapis.com/auth/drive.file openid email";
+    public static final String SCOPES = "openid email profile https://www.googleapis.com/auth/drive.file";
 
     private final Settings.Cloud cfg;
-    private final SecretStore secrets;
+    private final Secrets secrets;
     private final HttpClient http;
+    private final Path avatarFile;
+    private Runnable changed = () -> { };
     private String accessToken;
     private long accessExpiry;
-    private String tokenEndpoint = TOKEN;
+    String authEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
+    String tokenEndpoint = "https://oauth2.googleapis.com/token";
+    String userInfoEndpoint = "https://openidconnect.googleapis.com/v1/userinfo";
+    String revokeEndpoint = "https://oauth2.googleapis.com/revoke";
 
-    public GoogleAuth(Settings.Cloud cfg, SecretStore secrets, HttpClient http) {
+    public GoogleAuth(Settings.Cloud cfg, Secrets secrets, HttpClient http, Path avatarFile) {
         this.cfg = cfg;
         this.secrets = secrets;
         this.http = http;
+        this.avatarFile = avatarFile;
     }
 
-    /** For tests: point token refresh at a local fake server. */
-    void tokenEndpoint(String url) { tokenEndpoint = url; }
+    /** For tests: point every Google endpoint at a local fake. */
+    public void endpoints(String base) {
+        authEndpoint = base + "/auth";
+        tokenEndpoint = base + "/token";
+        userInfoEndpoint = base + "/userinfo";
+        revokeEndpoint = base + "/revoke";
+    }
+
+    /** Called (on a background thread) whenever the sign-in state or profile changes. */
+    public void onChange(Runnable r) { changed = r; }
 
     public boolean signedIn() { return secrets.load() != null; }
+    public Path avatar() { return avatarFile; }
 
     /**
      * Opens the browser for consent and waits (up to 5 minutes) for Google to redirect back.
-     * {@code openBrowser} receives the URL to show.
+     * {@code openBrowser} receives the URL to show. Completes with the account's email.
      */
     public CompletableFuture<String> signIn(Consumer<String> openBrowser) {
         return CompletableFuture.supplyAsync(() -> {
-            if (cfg.clientId.isBlank()) throw new IllegalStateException("Enter your Google OAuth client ID first.");
+            if (cfg.clientId.isBlank()) throw new IllegalStateException("Enter your Google OAuth client ID first (Settings › Cloud & Sync).");
             Pkce pkce = new Pkce();
             HttpServer server;
             try {
@@ -71,38 +88,48 @@ public final class GoogleAuth {
             CompletableFuture<Map<String, String>> callback = new CompletableFuture<>();
             server.createContext("/", ex -> {
                 Map<String, String> q = query(ex.getRequestURI().getRawQuery());
-                boolean ok = q.containsKey("code") && pkce.state.equals(q.get("state"));
-                byte[] body = ("<html><body style='font-family:sans-serif;background:#111;color:#eee;padding:40px'><h2>"
-                        + (ok ? "Zyclipra is connected. You can close this tab." : "Sign-in was cancelled or failed.")
-                        + "</h2></body></html>").getBytes(StandardCharsets.UTF_8);
+                // Only the redirect itself counts (not e.g. the browser asking for /favicon.ico).
+                boolean redirectHit = "/".equals(ex.getRequestURI().getPath()) && (q.containsKey("code") || q.containsKey("error"));
+                boolean ok = redirectHit && q.containsKey("code") && pkce.state.equals(q.get("state"));
+                byte[] body = ("<!doctype html><meta charset=utf-8><title>Zyclipra</title><body style='font-family:Segoe UI,sans-serif;background:#1E2228;color:#E6E8EC;padding:40px'><h2>"
+                        + (ok ? "Zyclipra is connected to Google. You can close this tab." : "Sign-in was cancelled or didn't match – go back to Zyclipra and try again.")
+                        + "</h2></body>").getBytes(StandardCharsets.UTF_8);
                 ex.getResponseHeaders().add("Content-Type", "text/html; charset=utf-8");
-                ex.sendResponseHeaders(200, body.length);
+                ex.getResponseHeaders().add("Cache-Control", "no-store");
+                ex.sendResponseHeaders(redirectHit ? 200 : 404, body.length);
                 ex.getResponseBody().write(body);
                 ex.close();
-                callback.complete(q);
+                if (redirectHit) callback.complete(q);
             });
             server.start();
             try {
-                String url = AUTH + "?response_type=code&client_id=" + enc(cfg.clientId) + "&redirect_uri=" + enc(redirect)
+                String url = authEndpoint + "?response_type=code&client_id=" + enc(cfg.clientId) + "&redirect_uri=" + enc(redirect)
                         + "&scope=" + enc(SCOPES) + "&code_challenge=" + pkce.challenge + "&code_challenge_method=S256"
                         + "&state=" + pkce.state + "&access_type=offline&prompt=consent";
                 openBrowser.accept(url);
                 Map<String, String> q = callback.get(5, TimeUnit.MINUTES);
-                if (!pkce.state.equals(q.get("state"))) throw new IllegalStateException("Sign-in response did not match (state).");
-                if (q.containsKey("error")) throw new IllegalStateException("Google said: " + q.get("error"));
+                if (q.containsKey("error")) throw new IllegalStateException(q.get("error").equals("access_denied")
+                        ? "You didn't allow access in Google's window." : "Google said: " + q.get("error"));
+                if (!pkce.state.equals(q.get("state"))) throw new IllegalStateException("The sign-in reply didn't match this request, so it was ignored. Try again.");
                 String form = "grant_type=authorization_code&code=" + enc(q.get("code")) + "&client_id=" + enc(cfg.clientId)
                         + "&redirect_uri=" + enc(redirect) + "&code_verifier=" + pkce.verifier
                         + (cfg.clientSecret.isBlank() ? "" : "&client_secret=" + enc(cfg.clientSecret));
                 JsonObject tok = post(tokenEndpoint, form);
-                if (!tok.has("refresh_token")) throw new IllegalStateException("Google did not return a refresh token.");
+                if (!tok.has("refresh_token")) throw new IllegalStateException("Google didn't return a refresh token. Remove Zyclipra at myaccount.google.com › Security › Third-party access, then connect again.");
+                if (!grantedDrive(tok)) throw new IllegalStateException("Google Drive access wasn't allowed. Connect again and tick the Google Drive box.");
                 secrets.save(tok.get("refresh_token").getAsString());
-                accessToken = tok.get("access_token").getAsString();
-                accessExpiry = System.currentTimeMillis() + tok.get("expires_in").getAsLong() * 1000 - 60_000;
-                String email = tok.has("id_token") ? emailFromIdToken(tok.get("id_token").getAsString()) : "";
-                cfg.accountEmail = email;
-                return email;
+                synchronized (this) {
+                    accessToken = tok.get("access_token").getAsString();
+                    accessExpiry = System.currentTimeMillis() + tok.get("expires_in").getAsLong() * 1000 - 60_000;
+                }
+                cfg.needsReauth = false;
+                loadProfile();
+                changed.run();
+                return cfg.accountEmail;
             } catch (RuntimeException e) {
                 throw e;
+            } catch (java.util.concurrent.TimeoutException e) {
+                throw new IllegalStateException("Nothing came back from Google within 5 minutes. Try again.");
             } catch (Exception e) {
                 throw new IllegalStateException(e.getMessage(), e);
             } finally {
@@ -111,11 +138,46 @@ public final class GoogleAuth {
         });
     }
 
+    private static boolean grantedDrive(JsonObject tok) {
+        return !tok.has("scope") || tok.get("scope").getAsString().contains("drive.file");
+    }
+
+    /** Reads name, email and picture from Google (OpenID Connect userinfo) and caches the picture. */
+    public void loadProfile() {
+        try {
+            HttpResponse<String> r = http.send(HttpRequest.newBuilder(URI.create(userInfoEndpoint)).timeout(Duration.ofSeconds(20))
+                    .header("Authorization", "Bearer " + accessToken()).GET().build(), HttpResponse.BodyHandlers.ofString());
+            if (r.statusCode() != 200) { LOG.info("Profile request: " + r.statusCode()); return; }
+            JsonObject o = JsonParser.parseString(r.body()).getAsJsonObject();
+            cfg.accountEmail = str(o, "email");
+            cfg.accountName = str(o, "name");
+            String pic = str(o, "picture");
+            if (avatarFile != null) {
+                Files.deleteIfExists(avatarFile);
+                URI u = pic.isBlank() ? null : URI.create(pic);
+                // Only Google's own picture host over HTTPS (or the local test fake), and at most 1 MB.
+                if (u != null && (("https".equals(u.getScheme()) && u.getHost() != null && u.getHost().endsWith(".googleusercontent.com"))
+                        || userInfoEndpoint.startsWith("http://127.0.0.1"))) {
+                    HttpResponse<InputStream> img = http.send(HttpRequest.newBuilder(u).timeout(Duration.ofSeconds(20)).GET().build(), HttpResponse.BodyHandlers.ofInputStream());
+                    try (InputStream in = img.body()) {
+                        byte[] b = in.readNBytes(1_000_001);
+                        String type = img.headers().firstValue("Content-Type").orElse("");
+                        if (img.statusCode() == 200 && b.length <= 1_000_000 && type.startsWith("image/jpeg")) Files.write(avatarFile, b); // the cache file is .jpg; other formats are skipped
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.info("Couldn't load the Google profile: " + e.getMessage());
+        }
+    }
+
+    private static String str(JsonObject o, String k) { return o.has(k) && o.get(k).isJsonPrimitive() ? o.get(k).getAsString() : ""; }
+
     /** A valid access token, refreshed when needed. */
     public synchronized String accessToken() throws IOException {
         if (accessToken != null && System.currentTimeMillis() < accessExpiry) return accessToken;
         String refresh = secrets.load();
-        if (refresh == null) throw new IOException("Not signed in to Google.");
+        if (refresh == null) throw new AuthException(0, cfg.needsReauth ? "Google needs you to connect again (Settings › Cloud & Sync)." : "Not connected to Google.");
         String form = "grant_type=refresh_token&refresh_token=" + enc(refresh) + "&client_id=" + enc(cfg.clientId)
                 + (cfg.clientSecret.isBlank() ? "" : "&client_secret=" + enc(cfg.clientSecret));
         try {
@@ -124,7 +186,13 @@ public final class GoogleAuth {
             accessExpiry = System.currentTimeMillis() + tok.get("expires_in").getAsLong() * 1000 - 60_000;
             return accessToken;
         } catch (AuthException e) {
-            if (e.status == 400 || e.status == 401) { secrets.clear(); cfg.accountEmail = ""; }
+            if (e.status == 400 || e.status == 401) {
+                // Revoked, expired or the OAuth client changed: forget the token, keep the name so the UI can say who to reconnect.
+                secrets.clear();
+                cfg.needsReauth = true;
+                changed.run();
+                throw new AuthException(e.status, "Google needs you to connect again (the saved sign-in was revoked or expired).");
+            }
             throw e;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -134,25 +202,29 @@ public final class GoogleAuth {
 
     public synchronized void invalidate() { accessToken = null; }
 
-    /** Revokes the token at Google and forgets it locally. */
+    /** Revokes the token at Google and forgets it and the profile locally. Cloud files and local clips are untouched. */
     public void disconnect() throws IOException {
         String refresh = secrets.load();
         secrets.clear();
-        accessToken = null;
+        synchronized (this) { accessToken = null; }
         cfg.accountEmail = "";
+        cfg.accountName = "";
+        cfg.needsReauth = false;
+        if (avatarFile != null) Files.deleteIfExists(avatarFile);
         if (refresh != null) {
             try {
-                http.send(HttpRequest.newBuilder(URI.create(REVOKE)).timeout(Duration.ofSeconds(15))
+                http.send(HttpRequest.newBuilder(URI.create(revokeEndpoint)).timeout(Duration.ofSeconds(15))
                         .header("Content-Type", "application/x-www-form-urlencoded")
                         .POST(HttpRequest.BodyPublishers.ofString("token=" + enc(refresh))).build(), HttpResponse.BodyHandlers.discarding());
             } catch (Exception e) {
-                LOG.info("Token revoke call failed (token is deleted locally anyway): " + e);
+                LOG.info("Token revoke call failed (the token is deleted on this PC anyway): " + e.getMessage());
             }
         }
+        changed.run();
     }
 
-    static final class AuthException extends IOException {
-        final int status;
+    public static final class AuthException extends IOException {
+        public final int status;
         AuthException(int status, String msg) { super(msg); this.status = status; }
     }
 
@@ -160,16 +232,14 @@ public final class GoogleAuth {
         HttpResponse<String> r = http.send(HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(30))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(form)).build(), HttpResponse.BodyHandlers.ofString());
-        if (r.statusCode() != 200) throw new AuthException(r.statusCode(), "Google token request failed (" + r.statusCode() + ")");
+        if (r.statusCode() != 200) {
+            // Google's error codes (e.g. invalid_grant, invalid_client) help; the response never contains tokens on failure.
+            String code = "";
+            try { code = JsonParser.parseString(r.body()).getAsJsonObject().get("error").getAsString(); } catch (Exception ignored) { }
+            throw new AuthException(r.statusCode(), "Google sign-in request failed (" + r.statusCode() + (code.isBlank() ? "" : ", " + code) + ")"
+                    + (code.equals("invalid_client") ? " – check the client ID and secret in Settings › Cloud & Sync." : ""));
+        }
         return JsonParser.parseString(r.body()).getAsJsonObject();
-    }
-
-    static String emailFromIdToken(String jwt) {
-        try {
-            String[] p = jwt.split("\\.");
-            JsonObject o = JsonParser.parseString(new String(java.util.Base64.getUrlDecoder().decode(p[1]), StandardCharsets.UTF_8)).getAsJsonObject();
-            return o.has("email") ? o.get("email").getAsString() : "";
-        } catch (Exception e) { return ""; }
     }
 
     static String enc(String s) { return URLEncoder.encode(s, StandardCharsets.UTF_8); }

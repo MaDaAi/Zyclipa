@@ -76,7 +76,7 @@ class DriveClientTest {
             long have = dc.uploadedBytes(session, data.length);
             assertEquals(DriveClient.CHUNK, have, "server kept the first chunk");
             long[] last = new long[1];
-            String id = dc.continueUpload(session, file, have, (d, t) -> last[0] = d);
+            String id = dc.continueUpload(session, file, have, (d, t) -> last[0] = d).id();
             assertEquals("file123", id);
             assertArrayEquals(data, received.toByteArray());
             assertEquals(data.length, last[0]);

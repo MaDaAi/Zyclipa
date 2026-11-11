@@ -168,18 +168,39 @@ public final class Settings {
     public static final class Cloud {
         public boolean enabled = false;
         public String clientId = "";
-        public String clientSecret = ""; // Google desktop clients may require it; never shipped, user supplied
-        public String folderName = "Zyclipra Clips";
+        /** Google requires it for "Desktop app" clients but documents it as not secret; user supplied, never shipped. */
+        public String clientSecret = "";
+        /** Top folder in Drive; Clips, Recordings and Screenshots go in sub-folders. */
+        public String folderName = "Zyclipra";
+        /** Old per-clip selection (before the upload queue); read once and moved into the queue. */
         public List<String> selectedClips = new ArrayList<>();
         public String accountEmail = "";
+        public String accountName = "";
+        /** Google refused the saved sign-in (revoked or expired): the user must reconnect. */
+        public boolean needsReauth = false;
+        public boolean autoUpload = false;
+        public boolean uploadClips = true;       // instant replays, trims and imports
+        public boolean uploadRecordings = true;  // manual recordings
+        public boolean uploadScreenshots = true;
+        /** false = after a verified upload the local file goes to the Recycle Bin. Off only by explicit choice. */
+        public boolean keepLocal = true;
+        public long lastSyncAt;
     }
 
     public static final class Remote {
         public boolean enabled = false;
         public int port = 47820;
-        public boolean lan = false;          // false = 127.0.0.1 only
-        public String pairingCodeHash = "";  // SHA-256 of the pairing code
-        public String pairingSalt = "";
+        /** local = this PC only (plus LAN/VPN below), public = behind the user's own HTTPS reverse proxy. */
+        public String mode = "local";
+        public boolean lan = false;          // devices on the home network
+        public boolean vpn = false;          // devices on a private VPN (Tailscale)
+        public String publicUrl = "";        // https://… served by the user's reverse proxy
+        public long publicVerifiedAt;        // when Zyclipra last reached itself through publicUrl
+        public String username = "";
+        /** Argon2id hash in PHC format ($argon2id$v=19$m=…,t=…,p=…$salt$hash); never the password itself. */
+        public String passwordHash = "";
+        public String pairingCodeHash = "";  // legacy (pairing-code login), no longer used
+        public String pairingSalt = "";      // legacy
     }
 
     public static final String[] CHANNELS = {"game", "chat", "media", "aux", "mic", "master"};
@@ -288,12 +309,17 @@ public final class Settings {
 
         if (cloud.clientId == null) cloud.clientId = "";
         if (cloud.clientSecret == null) cloud.clientSecret = "";
-        if (cloud.folderName == null || cloud.folderName.isBlank()) cloud.folderName = "Zyclipra Clips";
+        if (cloud.folderName == null || cloud.folderName.isBlank() || cloud.folderName.length() > 80 || cloud.folderName.equals("Zyclipra Clips") /* old default */) cloud.folderName = "Zyclipra";
+        if (cloud.accountName == null) cloud.accountName = "";
         if (cloud.selectedClips == null) cloud.selectedClips = new ArrayList<>();
         if (cloud.accountEmail == null) cloud.accountEmail = "";
 
         remote.port = clamp(remote.port, 1024, 65535);
         if (remote.pairingCodeHash == null) remote.pairingCodeHash = "";
+        if (!"local".equals(remote.mode) && !"public".equals(remote.mode)) remote.mode = "local";
+        if (remote.publicUrl == null || !remote.publicUrl.startsWith("https://")) { remote.publicUrl = ""; if ("public".equals(remote.mode)) remote.mode = "local"; }
+        if (remote.username == null) remote.username = "";
+        if (remote.passwordHash == null || !remote.passwordHash.startsWith("$argon2id$")) remote.passwordHash = "";
         if (remote.pairingSalt == null) remote.pairingSalt = "";
         return this;
     }

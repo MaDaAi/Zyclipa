@@ -1,5 +1,6 @@
 package io.zyclipra.remote;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -14,6 +15,7 @@ import io.zyclipra.core.Settings;
 import javax.net.ssl.SSLParameters;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
@@ -23,14 +25,23 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
 /**
- * Optional HTTPS dashboard. Off by default; when on it listens on 127.0.0.1 only unless
- * "allow other devices on my network" is ticked. It never opens router ports (no UPnP).
- * Every API call needs a session from the pairing-code login; state-changing calls also need
- * a custom header and same-origin, which blocks cross-site request forgery.
+ * Optional HTTPS dashboard, off by default. Who can reach it is decided by the hosting settings:
+ * <ul>
+ *   <li><b>Local</b> (default): this PC only – it listens on 127.0.0.1.</li>
+ *   <li><b>+ Home network</b>: also devices on the LAN (10/8, 172.16/12, 192.168/16, link-local, IPv6 ULA).</li>
+ *   <li><b>+ Private VPN</b>: also devices on a Tailscale network (100.64/10, fd7a:115c:a1e0::/48).</li>
+ *   <li><b>Public</b> (advanced): listens on 127.0.0.1 only, behind the owner's own HTTPS reverse proxy,
+ *       and only after Zyclipra has reached itself through that proxy's public https:// address.</li>
+ * </ul>
+ * Connections from any other address are refused. It never opens router ports, uses UPnP/NAT-PMP or changes
+ * the firewall. Every API call except sign-in needs a session; state-changing calls also need a custom header
+ * and a same-origin Origin, which blocks cross-site request forgery.
  */
 public final class DashboardServer {
     private static final Logger LOG = Log.get(DashboardServer.class);
@@ -47,8 +58,13 @@ public final class DashboardServer {
     private final RemoteControl control;
     private final Path keystore;
     private final SecretStore keystorePass;
+    /** Random per run: lets "public" mode check that its https:// address really reaches this app. */
+    private final String instanceId = UUID.randomUUID().toString();
     private HttpsServer server;
+    private ExecutorService pool;
     private String fingerprint = "";
+    private String certificatePem = "";
+    private String lastError = "";
 
     public DashboardServer(Settings.Remote cfg, DashboardAuth auth, RemoteControl control, Path keystore, SecretStore keystorePass) {
         this.cfg = cfg;
@@ -60,14 +76,33 @@ public final class DashboardServer {
 
     public synchronized boolean running() { return server != null; }
     public String fingerprint() { return fingerprint; }
+    /** The dashboard's own certificate (public part only), for a reverse proxy that should trust it. */
+    public String certificatePem() { return certificatePem; }
+    public String instanceId() { return instanceId; }
+    public String lastError() { return lastError; }
     public int port() { return server == null ? cfg.port : server.getAddress().getPort(); }
+
+    /** True when the server must accept connections from other machines (home network or VPN). */
+    boolean listensBeyondThisPc() { return !"public".equals(cfg.mode) && (cfg.lan || cfg.vpn); }
 
     public synchronized void start() throws Exception {
         if (server != null) return;
+        lastError = "";
+        if (!auth.configured()) {
+            lastError = "Create the dashboard username and password first.";
+            throw new IllegalStateException(lastError);
+        }
         TlsCertificates.Tls tls = TlsCertificates.load(keystore, keystorePass);
         fingerprint = tls.fingerprint();
-        InetAddress bind = cfg.lan ? InetAddress.getByName("0.0.0.0") : InetAddress.getLoopbackAddress();
-        HttpsServer s = HttpsServer.create(new InetSocketAddress(bind, cfg.port), 32);
+        certificatePem = tls.pem();
+        InetAddress bind = listensBeyondThisPc() ? InetAddress.getByName("0.0.0.0") : InetAddress.getLoopbackAddress();
+        HttpsServer s;
+        try {
+            s = HttpsServer.create(new InetSocketAddress(bind, cfg.port), 32);
+        } catch (BindException e) {
+            lastError = "Port " + cfg.port + " is already used by another program. Pick a different port and start again.";
+            throw new IllegalStateException(lastError, e);
+        }
         s.setHttpsConfigurator(new HttpsConfigurator(tls.context()) {
             @Override public void configure(HttpsParameters p) {
                 SSLParameters sp = tls.context().getDefaultSSLParameters();
@@ -76,61 +111,109 @@ public final class DashboardServer {
             }
         });
         s.createContext("/", this::handle);
-        s.setExecutor(Executors.newFixedThreadPool(8, r -> {
+        pool = Executors.newFixedThreadPool(8, r -> {
             Thread t = new Thread(r, "dashboard");
             t.setDaemon(true);
             return t;
-        }));
+        });
+        s.setExecutor(pool);
         s.start();
         server = s;
-        LOG.info("Dashboard listening on " + bind.getHostAddress() + ":" + port());
+        LOG.info("Dashboard listening on " + bind.getHostAddress() + ":" + port() + " (mode " + cfg.mode + (cfg.lan ? ", home network" : "") + (cfg.vpn ? ", VPN" : "") + ")");
     }
 
     public synchronized void stop() {
         if (server != null) { server.stop(0); server = null; }
+        if (pool != null) { pool.shutdownNow(); pool = null; }
     }
 
-    /** Addresses people can type into a phone browser. */
-    public List<String> urls() {
-        List<String> out = new ArrayList<>();
-        out.add("https://localhost:" + port());
-        if (!cfg.lan) return out;
+    public synchronized void restart() throws Exception {
+        stop();
+        start();
+    }
+
+    /** True if something else on this PC is already listening on {@code port}. */
+    public static boolean portInUse(int port) {
+        try (java.net.ServerSocket s = new java.net.ServerSocket()) {
+            s.setReuseAddress(false);
+            s.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), port));
+            return false;
+        } catch (IOException e) {
+            return true;
+        }
+    }
+
+    public record Url(String kind, String url) { }
+
+    /** Addresses that really lead to the dashboard with the current settings (none are shown that aren't set up). */
+    public List<Url> addresses() {
+        List<Url> out = new ArrayList<>();
+        out.add(new Url("This PC", "https://localhost:" + port()));
+        if ("public".equals(cfg.mode)) {
+            if (!cfg.publicUrl.isBlank() && cfg.publicVerifiedAt > 0) out.add(new Url("Internet (your reverse proxy)", cfg.publicUrl));
+            return out;
+        }
+        if (!cfg.lan && !cfg.vpn) return out;
         try {
             for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                if (!ni.isUp() || ni.isLoopback() || ni.isVirtual()) continue;
+                if (!ni.isUp() || ni.isLoopback()) continue;
                 for (InetAddress a : Collections.list(ni.getInetAddresses())) {
                     if (!(a instanceof java.net.Inet4Address)) continue;
-                    if (a.isSiteLocalAddress()) out.add("https://" + a.getHostAddress() + ":" + port());
-                    else if (vpnAddress(a)) out.add("https://" + a.getHostAddress() + ":" + port() + " (away from home, via Tailscale)");
+                    if (cfg.lan && a.isSiteLocalAddress()) out.add(new Url("Home network", "https://" + a.getHostAddress() + ":" + port()));
+                    else if (cfg.vpn && vpnAddress(a)) out.add(new Url("Tailscale (away from home)", "https://" + a.getHostAddress() + ":" + port()));
                 }
             }
         } catch (IOException ignored) { }
         return out;
     }
 
-    /**
-     * True for addresses that can only belong to this PC, your home network or a private VPN: loopback,
-     * 10/8, 172.16/12, 192.168/16, link-local, 100.64/10 (Tailscale and similar), and IPv6 fc00::/7.
-     * The dashboard refuses everything else, so it stays private even if a router port were opened by mistake.
-     */
-    public static boolean privateAddress(InetAddress a) {
-        if (a == null) return false;
-        if (a.isLoopbackAddress() || a.isSiteLocalAddress() || a.isLinkLocalAddress()) return true;
-        byte[] b = a.getAddress();
-        if (b.length == 4) return (b[0] & 0xff) == 100 && (b[1] & 0xc0) == 64;
-        return (b[0] & 0xfe) == 0xfc;
+    public List<String> urls() { return addresses().stream().map(u -> u.url() + "  (" + u.kind() + ")").toList(); }
+
+    /** The Tailscale (100.64/10) addresses this PC has right now, if Tailscale is installed and connected. */
+    public static List<String> tailscaleAddresses() {
+        List<String> out = new ArrayList<>();
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isUp()) continue;
+                for (InetAddress a : Collections.list(ni.getInetAddresses())) if (vpnAddress(a)) out.add(a.getHostAddress());
+            }
+        } catch (IOException ignored) { }
+        return out;
     }
 
-    private static boolean vpnAddress(InetAddress a) {
+    /** Home-network ranges: RFC 1918, link-local and IPv6 unique-local (except Tailscale's own range). */
+    static boolean lanAddress(InetAddress a) {
+        if (a.isSiteLocalAddress() || a.isLinkLocalAddress()) return true;
         byte[] b = a.getAddress();
-        return b.length == 4 && (b[0] & 0xff) == 100 && (b[1] & 0xc0) == 64;
+        return b.length == 16 && (b[0] & 0xfe) == 0xfc && !vpnAddress(a);
+    }
+
+    /** Tailscale's ranges: 100.64.0.0/10 and fd7a:115c:a1e0::/48. */
+    static boolean vpnAddress(InetAddress a) {
+        byte[] b = a.getAddress();
+        if (b.length == 4) return (b[0] & 0xff) == 100 && (b[1] & 0xc0) == 64;
+        return (b[0] & 0xff) == 0xfd && (b[1] & 0xff) == 0x7a && (b[2] & 0xff) == 0x11 && (b[3] & 0xff) == 0x5c && (b[4] & 0xff) == 0xa1 && (b[5] & 0xff) == 0xe0;
+    }
+
+    /** Any address that can only be this PC, a home network or a private VPN. */
+    public static boolean privateAddress(InetAddress a) {
+        return a != null && (a.isLoopbackAddress() || lanAddress(a) || vpnAddress(a));
+    }
+
+    /** Whether a connection from {@code a} is allowed with these settings. */
+    public static boolean allowed(InetAddress a, Settings.Remote cfg) {
+        if (a == null) return false;
+        if (a.isLoopbackAddress()) return true;          // this PC, or the owner's reverse proxy on this PC
+        if ("public".equals(cfg.mode)) return false;      // public mode serves only through the local proxy
+        return (cfg.lan && lanAddress(a)) || (cfg.vpn && vpnAddress(a));
     }
 
     private void handle(HttpExchange ex) throws IOException {
         try {
-            if (!privateAddress(ex.getRemoteAddress().getAddress())) {
-                LOG.warning("dashboard: refused a connection from outside your network: " + ex.getRemoteAddress().getAddress().getHostAddress());
-                send(ex, 403, json("error", "Only devices on your own network or private VPN can open this."));
+            InetAddress remote = ex.getRemoteAddress().getAddress();
+            if (!allowed(remote, cfg)) {
+                LOG.warning("dashboard: refused a connection from " + remote.getHostAddress() + " (not allowed by the hosting settings)");
+                send(ex, 403, json("error", "This device isn't allowed by Zyclipra's hosting settings."));
                 return;
             }
             var h = ex.getResponseHeaders();
@@ -138,15 +221,22 @@ public final class DashboardServer {
             h.add("X-Frame-Options", "DENY");
             h.add("Referrer-Policy", "no-referrer");
             h.add("Strict-Transport-Security", "max-age=31536000");
-            h.add("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'");
+            h.add("Cross-Origin-Opener-Policy", "same-origin");
+            h.add("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+            h.add("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self'; script-src 'self'; "
+                    + "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
             String path = ex.getRequestURI().getPath();
             if (path.startsWith("/api/")) api(ex, path.substring(5));
             else asset(ex, path);
+        } catch (SecurityException e) {
+            send(ex, 403, json("error", e.getMessage()));
         } catch (IllegalArgumentException e) {
             send(ex, 400, json("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            send(ex, 409, json("error", e.getMessage()));
         } catch (Exception e) {
             LOG.warning("dashboard: " + e);
-            send(ex, 500, json("error", "internal error"));
+            send(ex, 500, json("error", "Something went wrong in Zyclipra. Check its log for details."));
         } finally {
             ex.close();
         }
@@ -176,6 +266,23 @@ public final class DashboardServer {
         return null;
     }
 
+    /**
+     * The address used for sign-in rate limiting. Behind the owner's reverse proxy every request comes
+     * from 127.0.0.1, so in public mode (and only for loopback connections) the proxy's X-Forwarded-For
+     * last hop is used instead; anyone else can't set it to dodge the limit because they can't connect.
+     */
+    private String clientAddress(HttpExchange ex) {
+        InetAddress a = ex.getRemoteAddress().getAddress();
+        if ("public".equals(cfg.mode) && a.isLoopbackAddress()) {
+            String fwd = ex.getRequestHeaders().getFirst("X-Forwarded-For");
+            if (fwd != null) {
+                String lastHop = fwd.substring(fwd.lastIndexOf(',') + 1).trim();
+                if (lastHop.matches("[0-9a-fA-F:.]{2,45}")) return lastHop;
+            }
+        }
+        return a.getHostAddress();
+    }
+
     private void api(HttpExchange ex, String route) throws IOException {
         String method = ex.getRequestMethod();
         ex.getResponseHeaders().add("Cache-Control", "no-store");
@@ -188,23 +295,34 @@ public final class DashboardServer {
             if (origin != null && host != null && !origin.equals("https://" + host)) { send(ex, 403, json("error", "bad origin")); return; }
         } else if (!"GET".equals(method)) { send(ex, 405, json("error", "method")); return; }
 
+        if (route.equals("instance") && !post) { send(ex, 200, json("instance", instanceId)); return; }
+        if (route.equals("setup") && !post) {
+            JsonObject o = new JsonObject();
+            o.addProperty("configured", auth.configured());
+            send(ex, 200, o);
+            return;
+        }
+
         JsonObject body = post ? readBody(ex) : new JsonObject();
-        String addr = ex.getRemoteAddress().getAddress().getHostAddress();
 
         if (route.equals("login") && post) {
-            String code = body.has("code") ? body.get("code").getAsString() : "";
-            String token = auth.login(addr, code);
+            String token = auth.login(clientAddress(ex), ex.getRequestHeaders().getFirst("User-Agent"), opt(body, "username"), opt(body, "password"));
             if (token == null) {
-                boolean locked = auth.lastResult() == DashboardAuth.Result.LOCKED;
-                send(ex, locked ? 429 : 401, json("error", locked ? "Too many attempts - try again later." : "Wrong pairing code."));
+                DashboardAuth.Result r = auth.lastResult();
+                switch (r) {
+                    case LOCKED -> send(ex, 429, json("error", "Too many attempts – wait a few minutes and try again."));
+                    case NOT_SET_UP -> send(ex, 503, json("error", "Finish setting up the dashboard in the Zyclipra app first (Settings › Hosting)."));
+                    default -> send(ex, 401, json("error", "Wrong username or password."));
+                }
                 return;
             }
-            ex.getResponseHeaders().add("Set-Cookie", "zs=" + token + "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=43200");
+            ex.getResponseHeaders().add("Set-Cookie", "zs=" + token + "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=604800");
             send(ex, 200, json("ok", "true"));
             return;
         }
         String token = cookie(ex, "zs");
-        if (!auth.valid(token)) { send(ex, 401, json("error", "Sign in with the pairing code.")); return; }
+        String sessionId = auth.sessionId(token);
+        if (sessionId == null) { send(ex, 401, json("error", auth.configured() ? "Please sign in." : "Finish setting up the dashboard in the Zyclipra app first.")); return; }
 
         switch (method + " " + route) {
             case "GET status" -> send(ex, 200, control.status());
@@ -214,12 +332,11 @@ public final class DashboardServer {
             case "GET levels" -> send(ex, 200, control.levels());
             case "GET mixer" -> send(ex, 200, control.mixer());
             case "GET sounds" -> send(ex, 200, control.sounds());
-            case "POST recording/toggle" -> { control.toggleRecording(); send(ex, 200, json("ok", "true")); }
-            case "POST replay/toggle" -> { control.toggleReplay(); send(ex, 200, json("ok", "true")); }
-            case "POST replay/save" -> { control.saveReplay(); send(ex, 200, json("ok", "true")); }
-            case "POST screenshot" -> { control.screenshot(); send(ex, 200, json("ok", "true")); }
+            case "POST recording/toggle" -> send(ex, 200, control.toggleRecording());
+            case "POST replay/toggle" -> send(ex, 200, control.toggleReplay());
+            case "POST replay/save" -> send(ex, 200, control.saveReplay());
+            case "POST screenshot" -> send(ex, 200, control.screenshot());
             case "POST sounds/stop" -> { control.stopSounds(); send(ex, 200, json("ok", "true")); }
-            case "POST logout" -> { auth.logout(token); send(ex, 200, json("ok", "true")); }
             case "POST mixer" -> {
                 String id = str(body, "channel");
                 double v = body.has("volume") ? body.get("volume").getAsDouble() : -1;
@@ -228,8 +345,61 @@ public final class DashboardServer {
                 send(ex, 200, json("ok", "true"));
             }
             case "POST sounds/play" -> { control.playSound(str(body, "id")); send(ex, 200, json("ok", "true")); }
+
+            // ---- account & security
+            case "POST logout" -> { auth.logout(token); send(ex, 200, json("ok", "true")); }
+            case "GET account" -> send(ex, 200, account(sessionId));
+            case "POST account/password" -> {
+                auth.changePassword(token, opt(body, "current"), opt(body, "password"), opt(body, "confirm"));
+                send(ex, 200, json("ok", "Password changed. Other browsers were signed out."));
+            }
+            case "POST account/username" -> {
+                auth.changeUsername(opt(body, "current"), opt(body, "username"));
+                send(ex, 200, json("ok", "Username changed."));
+            }
+            case "POST account/revoke" -> {
+                String id = str(body, "id");
+                if (id.equals(sessionId)) throw new IllegalArgumentException("Use Sign out to end this session.");
+                boolean ended = auth.revoke(id);
+                send(ex, ended ? 200 : 404, json(ended ? "ok" : "error", ended ? "That session was signed out." : "That session had already ended."));
+            }
+
+            // ---- Google Drive (the desktop app keeps the Google sign-in; the dashboard never sees tokens)
+            case "GET cloud" -> send(ex, 200, control.cloudStatus());
+            case "GET cloud/avatar" -> serveFile(ex, control.cloudAvatar().orElse(null), false);
+            case "POST cloud/settings" -> send(ex, 200, control.cloudSettings(body));
+            case "POST cloud/upload" -> send(ex, 200, control.cloudUpload(checkId(str(body, "id"))));
+            case "POST cloud/retry" -> send(ex, 200, control.cloudRetry(body.has("id") ? checkId(str(body, "id")) : null));
+            case "POST cloud/cancel" -> send(ex, 200, control.cloudCancel(checkId(str(body, "id"))));
             default -> send(ex, 404, json("error", "unknown endpoint"));
         }
+    }
+
+    private JsonObject account(String currentSession) {
+        JsonObject o = new JsonObject();
+        o.addProperty("username", auth.username());
+        JsonArray list = new JsonArray();
+        for (DashboardAuth.SessionInfo s : auth.sessions()) {
+            JsonObject j = new JsonObject();
+            j.addProperty("id", s.id());
+            j.addProperty("created", s.created());
+            j.addProperty("lastSeen", s.lastSeen());
+            j.addProperty("address", s.address());
+            j.addProperty("agent", s.agent());
+            j.addProperty("current", s.id().equals(currentSession));
+            list.add(j);
+        }
+        o.add("sessions", list);
+        JsonObject hosting = new JsonObject();
+        hosting.addProperty("mode", cfg.mode);
+        hosting.addProperty("lan", cfg.lan);
+        hosting.addProperty("vpn", cfg.vpn);
+        hosting.addProperty("https", true);
+        hosting.addProperty("remote", "public".equals(cfg.mode) || cfg.lan || cfg.vpn);
+        hosting.addProperty("publicUrl", "public".equals(cfg.mode) && cfg.publicVerifiedAt > 0 ? cfg.publicUrl : "");
+        o.add("hosting", hosting);
+        o.addProperty("minPasswordLength", auth.minPasswordLength());
+        return o;
     }
 
     private static String query(HttpExchange ex, String key) {
@@ -243,18 +413,19 @@ public final class DashboardServer {
     }
 
     /** Clip ids are short letters/digits only; anything else (paths, "..", slashes) is refused before any lookup. */
-    private static String clipId(HttpExchange ex) {
-        String id = query(ex, "id");
+    private static String clipId(HttpExchange ex) { return checkId(query(ex, "id")); }
+
+    private static String checkId(String id) {
         if (id == null || !CLIP_ID.matcher(id).matches()) throw new IllegalArgumentException("bad clip id");
         return id;
     }
 
     /**
-     * Sends a clip or thumbnail. Supports byte ranges so the browser's video player can seek, and streams in
+     * Sends a clip or picture. Supports byte ranges so the browser's video player can seek, and streams in
      * chunks so big clips don't fill memory. Only known media types are sent.
      */
     private static void serveFile(HttpExchange ex, Path file, boolean download) throws IOException {
-        if (file == null) { send(ex, 404, json("error", "not found")); return; }
+        if (file == null || !java.nio.file.Files.isRegularFile(file)) { send(ex, 404, json("error", "not found")); return; }
         String name = file.getFileName().toString();
         String ext = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1).toLowerCase(java.util.Locale.ROOT) : "";
         String type = MEDIA.get(ext);
@@ -286,7 +457,6 @@ public final class DashboardServer {
         if (partial) h.set("Content-Range", "bytes " + start + "-" + end + "/" + size);
         long len = end - start + 1;
         ex.sendResponseHeaders(partial ? 206 : 200, len);
-        if ("HEAD".equals(ex.getRequestMethod())) return;
         try (var ch = java.nio.channels.FileChannel.open(file, java.nio.file.StandardOpenOption.READ);
              var out = ex.getResponseBody()) {
             java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(64 * 1024);
@@ -312,6 +482,14 @@ public final class DashboardServer {
         return s;
     }
 
+    /** Optional string field (passwords may be up to 200 characters). */
+    private static String opt(JsonObject o, String k) {
+        if (!o.has(k) || !o.get(k).isJsonPrimitive()) return null;
+        String s = o.get(k).getAsString();
+        if (s.length() > 200) throw new IllegalArgumentException(k + " too long");
+        return s;
+    }
+
     private static JsonObject readBody(HttpExchange ex) throws IOException {
         byte[] b = ex.getRequestBody().readNBytes(MAX_BODY + 1);
         if (b.length > MAX_BODY) throw new IllegalArgumentException("request too large");
@@ -325,7 +503,7 @@ public final class DashboardServer {
         }
     }
 
-    private static JsonObject json(String k, String v) {
+    static JsonObject json(String k, String v) {
         JsonObject o = new JsonObject();
         o.addProperty(k, v);
         return o;

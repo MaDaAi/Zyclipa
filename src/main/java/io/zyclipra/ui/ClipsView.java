@@ -404,9 +404,18 @@ public final class ClipsView implements View {
         move.setOnAction(e -> move(c));
         MenuItem reveal = new MenuItem("Show in folder");
         reveal.setOnAction(e -> reveal(f));
-        MenuItem drive = new MenuItem(c.driveFileId.isBlank() ? "Upload to Google Drive" : "On Google Drive ✓");
-        drive.setDisable(!ctx.settings.cloud.enabled || !ctx.sync.connected() || !c.driveFileId.isBlank());
-        drive.setOnAction(e -> { ctx.sync.select(c.id, true); ctx.sync.upload(c); win.toast("Uploading " + c.title + "…", false); });
+        String st = ctx.sync.stateOf(c.id);
+        MenuItem drive = new MenuItem(switch (st) {
+            case "synced" -> "On Google Drive ✓";
+            case "queued", "uploading" -> "Uploading to Google Drive…";
+            case "failed", "unavailable" -> "Upload to Google Drive again";
+            default -> "Upload to Google Drive";
+        });
+        drive.setDisable(st.equals("synced") || st.equals("queued") || st.equals("uploading"));
+        drive.setOnAction(e -> {
+            try { if (st.equals("failed") || st.equals("unavailable")) ctx.sync.retry(c.id); else win.toast(ctx.sync.upload(c), false); }
+            catch (IllegalStateException ex) { win.toast(ex.getMessage(), true); }
+        });
         MenuItem del = new MenuItem("Delete");
         del.setOnAction(e -> delete(c));
         return new ContextMenu(open, player, rename, move, reveal, drive, del);
@@ -429,25 +438,6 @@ public final class ClipsView implements View {
         body.getChildren().setAll(n);
         node.setTop(null); // the editor uses the whole page, like a separate window
         n.requestFocus();
-    }
-
-    private VBox driveCard(Clip c) {
-        ProgressBar bar = new ProgressBar(c.driveFileId.isBlank() ? 0 : 1);
-        bar.setMaxWidth(Double.MAX_VALUE);
-        SyncService.Status st = ctx.sync.status().get(c.id);
-        Label lbl = Ui.label(!c.driveFileId.isBlank() ? "On Google Drive" : st != null ? st.message()
-                : ctx.sync.connected() ? "Not uploaded yet" : "Connect your Google account in Settings › Google Drive", "small", "muted");
-        ToggleButton sw = Ui.toggleSwitch(ctx.sync.selected(c.id), "Keep this clip synced", on -> ctx.sync.select(c.id, on));
-        Button up = Ui.button("Upload now", Icons.CLOUD, () -> { ctx.sync.select(c.id, true); sw.setSelected(true); ctx.sync.upload(c); });
-        up.setDisable(!ctx.sync.connected() || !c.driveFileId.isBlank());
-        ctx.sync.onStatus(s -> Ui.fx(() -> {
-            if (!s.clipId().equals(openClip)) return;
-            bar.setProgress(s.total() == 0 ? 0 : s.done() / (double) s.total());
-            lbl.setText(s.message() + (s.total() > 0 ? " · " + Ui.bytes(s.done()) + " / " + Ui.bytes(s.total()) : ""));
-        }));
-        VBox card = Ui.section("Google Drive", sw, up);
-        card.getChildren().addAll(bar, lbl);
-        return card;
     }
 
     private void closeClip() {

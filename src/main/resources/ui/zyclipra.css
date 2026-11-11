@@ -301,3 +301,7 @@
 .mix-col-head-link { -fx-cursor: hand; }
 .mix-col-head-link:hover { -fx-background-color: #2F3540; }
 .rail-logo { -fx-padding: 4 0 14 0; }
+.titled-pane.plain-titled > .title { -fx-background-color: -card; -fx-padding: 12 16; -fx-background-radius: 4 4 0 0; }
+.titled-pane.plain-titled > .title > .text { -fx-fill: #D5D9E0; -fx-font-weight: 700; }
+.titled-pane.plain-titled > .title > .arrow-button > .arrow { -fx-background-color: -muted; }
+.titled-pane.plain-titled > .content { -fx-background-color: -card; -fx-border-color: transparent; -fx-padding: 4 20 18 20; }

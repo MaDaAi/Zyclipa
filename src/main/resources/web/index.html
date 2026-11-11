@@ -15,6 +15,8 @@
     <nav id="nav" hidden>
       <button id="tab-clips" class="tab on" aria-pressed="true">Clips</button>
       <button id="tab-control" class="tab" aria-pressed="false">Control</button>
+      <button id="tab-cloud" class="tab" aria-pressed="false">Cloud &amp; Sync</button>
+      <button id="tab-account" class="tab" aria-pressed="false">Account</button>
     </nav>
     <span class="grow"></span>
     <button id="logout" class="ghost" hidden>Sign out</button>
@@ -22,9 +24,10 @@
 
   <section id="login" class="card narrow">
     <h2>Sign in</h2>
-    <p class="muted">Enter the pairing code shown in Zyclipra under Settings → Remote dashboard.</p>
-    <form id="login-form">
-      <input id="code" autocomplete="one-time-code" placeholder="ABCDE-FGHJK" maxlength="20" aria-label="Pairing code" required>
+    <p id="login-hint" class="muted">Use the username and password you created in Zyclipra under Settings › Hosting.</p>
+    <form id="login-form" class="stack">
+      <label class="field">Username<input id="username" autocomplete="username" maxlength="32" required></label>
+      <label class="field">Password<input id="password" type="password" autocomplete="current-password" maxlength="200" required></label>
       <button type="submit" class="primary">Sign in</button>
     </form>
     <p id="login-error" class="error-text" role="alert"></p>
@@ -48,6 +51,8 @@
         <option value="video">Videos</option>
         <option value="screenshot">Screenshots</option>
         <option value="favorite">Favourites ★</option>
+        <option value="local">Not on Google Drive</option>
+        <option value="synced">On Google Drive</option>
       </select>
       <select id="sort" aria-label="Sort">
         <option value="new">Newest</option>
@@ -84,6 +89,67 @@
     <p id="sys" class="muted small"></p>
   </main>
 
+  <main id="cloud-view" hidden>
+    <section class="card">
+      <div class="row">
+        <img id="cloud-avatar" class="avatar" alt="" width="48" height="48" hidden>
+        <div class="grow">
+          <h2 id="cloud-title">Google Drive</h2>
+          <p id="cloud-account" class="muted"></p>
+        </div>
+        <a id="cloud-folder" class="button" href="#" target="_blank" rel="noopener noreferrer" hidden>Open in Google Drive</a>
+      </div>
+      <p id="cloud-note" class="muted small"></p>
+    </section>
+    <section class="card" id="cloud-prefs">
+      <h2>Automatic upload</h2>
+      <p class="muted small">New clips are copied to your Google Drive as soon as they're saved on your PC – including ones you clip from here.</p>
+      <label class="check"><input type="checkbox" id="pref-autoUpload"> Upload new clips automatically</label>
+      <label class="check"><input type="checkbox" id="pref-uploadClips"> Clips (instant replays, trims)</label>
+      <label class="check"><input type="checkbox" id="pref-uploadRecordings"> Recordings</label>
+      <label class="check"><input type="checkbox" id="pref-uploadScreenshots"> Screenshots</label>
+      <p class="muted small">Your clips always stay on your PC unless you chose otherwise in the Zyclipra app. Connecting a Google account is done in the app.</p>
+    </section>
+    <section class="card">
+      <div class="row between"><h2>Sync status</h2><button id="retry-all">Retry failed uploads</button></div>
+      <p id="cloud-summary" class="muted"></p>
+      <div id="cloud-queue"></div>
+    </section>
+  </main>
+
+  <main id="account-view" hidden>
+    <section class="card">
+      <h2>Account &amp; security</h2>
+      <p id="acc-user"></p>
+      <p id="acc-hosting" class="muted small"></p>
+      <p id="acc-cloud" class="muted small"></p>
+    </section>
+    <div class="grid">
+      <section class="card">
+        <h2>Change password</h2>
+        <form id="pw-form" class="stack">
+          <label class="field">Current password<input id="pw-current" type="password" autocomplete="current-password" maxlength="200" required></label>
+          <label class="field">New password<input id="pw-new" type="password" autocomplete="new-password" maxlength="200" required></label>
+          <label class="field">Confirm new password<input id="pw-confirm" type="password" autocomplete="new-password" maxlength="200" required></label>
+          <button type="submit" class="primary">Change password</button>
+        </form>
+        <p class="muted small">Every other browser is signed out when the password changes.</p>
+      </section>
+      <section class="card">
+        <h2>Change username</h2>
+        <form id="user-form" class="stack">
+          <label class="field">New username<input id="user-new" autocomplete="username" maxlength="32" required></label>
+          <label class="field">Current password<input id="user-pw" type="password" autocomplete="current-password" maxlength="200" required></label>
+          <button type="submit">Change username</button>
+        </form>
+      </section>
+    </div>
+    <section class="card">
+      <h2>Signed-in browsers</h2>
+      <div id="sessions"></div>
+    </section>
+  </main>
+
   <dialog id="player" aria-labelledby="player-title">
     <div class="player-head">
       <div>
@@ -94,9 +160,11 @@
     </div>
     <div id="player-media" class="player-media"></div>
     <p id="player-meta" class="muted small"></p>
+    <p id="player-sync" class="small"></p>
     <p id="player-desc"></p>
     <div class="row">
       <a id="player-download" class="button primary" href="#" download>Download</a>
+      <button id="player-upload">Upload to Google Drive</button>
       <button id="player-prev">‹ Previous</button>
       <button id="player-next">Next ›</button>
     </div>

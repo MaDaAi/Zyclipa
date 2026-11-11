@@ -15,12 +15,12 @@ import java.nio.file.attribute.PosixFilePermissions;
  * which ties it to your Windows account, so another user or another PC can't read it.
  * Elsewhere the file is made readable by its owner only (an OS keychain is planned).
  */
-public final class SecretStore {
+public final class SecretStore implements Secrets {
     private final Path file;
 
     public SecretStore(Path file) { this.file = file; }
 
-    public void save(String secret) throws IOException {
+    @Override public void save(String secret) throws IOException {
         byte[] data = secret.getBytes(StandardCharsets.UTF_8);
         byte[] out = Platform.isWindows() ? Crypt32Util.cryptProtectData(data) : data;
         Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
@@ -31,7 +31,7 @@ public final class SecretStore {
         Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
     }
 
-    public String load() {
+    @Override public String load() {
         try {
             if (!Files.exists(file)) return null;
             byte[] in = Files.readAllBytes(file);
@@ -42,5 +42,5 @@ public final class SecretStore {
         }
     }
 
-    public void clear() throws IOException { Files.deleteIfExists(file); }
+    @Override public void clear() throws IOException { Files.deleteIfExists(file); }
 }
