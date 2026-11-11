@@ -47,7 +47,7 @@ public final class DashboardServer {
     private static final Logger LOG = Log.get(DashboardServer.class);
     private static final int MAX_BODY = 4096;
     private static final Map<String, String> TYPES = Map.of("html", "text/html; charset=utf-8", "js", "text/javascript; charset=utf-8",
-            "css", "text/css; charset=utf-8", "svg", "image/svg+xml", "png", "image/png");
+            "css", "text/css; charset=utf-8", "svg", "image/svg+xml", "png", "image/png", "txt", "text/plain; charset=utf-8");
     /** Media the clips page may send; anything else in the clips folder is never served. */
     private static final Map<String, String> MEDIA = Map.of("mp4", "video/mp4", "mov", "video/quicktime", "mkv", "video/x-matroska",
             "webm", "video/webm", "png", "image/png", "jpg", "image/jpeg", "jpeg", "image/jpeg");
@@ -264,13 +264,23 @@ public final class DashboardServer {
     private void asset(HttpExchange ex, String path) throws IOException {
         if (!"GET".equals(ex.getRequestMethod())) { send(ex, 405, json("error", "method")); return; }
         String p = path.equals("/") ? "/index.html" : path;
-        if (!p.matches("/[a-z0-9_-]+\\.(html|js|css|svg|png)")) { send(ex, 404, json("error", "not found")); return; }
+        if (!p.matches("/[a-z0-9_-]+\\.(html|js|css|svg|png|txt)")) { notFound(ex); return; }
         try (InputStream in = DashboardServer.class.getResourceAsStream("/web" + p)) {
-            if (in == null) { send(ex, 404, json("error", "not found")); return; }
+            if (in == null) { notFound(ex); return; }
             byte[] b = in.readAllBytes();
             ex.getResponseHeaders().add("Content-Type", TYPES.get(p.substring(p.lastIndexOf('.') + 1)));
             ex.getResponseHeaders().add("Cache-Control", "no-cache");
             ex.sendResponseHeaders(200, b.length);
+            ex.getResponseBody().write(b);
+        }
+    }
+
+    /** A friendly "page not found" page for browsers (API calls still get JSON). */
+    private void notFound(HttpExchange ex) throws IOException {
+        try (InputStream in = DashboardServer.class.getResourceAsStream("/web/404.html")) {
+            byte[] b = in == null ? "Not found".getBytes(StandardCharsets.UTF_8) : in.readAllBytes();
+            ex.getResponseHeaders().add("Content-Type", TYPES.get("html"));
+            ex.sendResponseHeaders(404, b.length);
             ex.getResponseBody().write(b);
         }
     }

@@ -789,9 +789,16 @@ public final class SettingsView implements View {
         Button data = Ui.button("Open settings folder", Icons.FOLDER, () -> {
             try { java.awt.Desktop.getDesktop().open(ctx.paths.root().toFile()); } catch (Exception e) { win.toast(e.getMessage(), true); }
         }, "outline");
-        return pageBox("About and Privacy", "Zyclipra " + AppContext.VERSION + " – free and open source (MIT licence).",
-                Ui.settingRow("No account, no ads, no tracking", "Everything stays on this PC unless you turn on Google Drive sync or the remote dashboard.", null),
+        String site = "https://madaai.github.io/zyclipra-dashboard/";
+        java.util.function.Function<String[], Button> link = a -> Ui.button(a[0], null, () -> DriveSyncBox.browse(site + a[1]), "outline");
+        return pageBox("About and Privacy", "Zyclipra " + AppContext.VERSION + " – free software (MIT licence), made in Ontario, Canada.",
+                Ui.settingRow("No Zyclipra account, no ads, no tracking", "Everything stays on this PC unless you turn on Google Drive sync or the remote dashboard. "
+                        + "Zyclipra sends nothing to its developer.", null),
                 Ui.settingRow("Your microphone and screen", "The mic is only used while Voice effects are on; the screen only while recording or while Instant replay is on.", null),
+                Ui.settingRow("Legal", "By using Zyclipra you agree to the EULA and Terms of Use. The same pages are on your dashboard (/privacy.html, /eula.html).", null),
+                Ui.row(8, link.apply(new String[]{"Privacy Policy", "privacy.html"}), link.apply(new String[]{"Terms of Use", "terms.html"}),
+                        link.apply(new String[]{"EULA", "eula.html"}), link.apply(new String[]{"Third-party notices", "third-party-notices.txt"})),
+                Ui.settingRow("Contact", "notefirasupport@gmail.com – questions, privacy requests or problems.", null),
                 Ui.settingRow("Files", ctx.paths.root().toString(), Ui.row(8, logs, data)));
     }
 }

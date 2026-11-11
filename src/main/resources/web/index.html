@@ -7,6 +7,7 @@
   <title>Zyclipra</title>
   <link rel="icon" type="image/png" href="/icon.png">
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/site.css">
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -32,6 +33,7 @@
       <button type="submit" class="primary big">Sign in</button>
     </form>
     <p id="login-error" class="error-text" role="alert"></p>
+    <p class="muted small">By signing in you agree to the <a href="/terms.html">Terms of Use</a> and confirm you've read the <a href="/privacy.html">Privacy Policy</a>.</p>
   </section>
 
   <!-- Dashboard -->
@@ -196,6 +198,10 @@
     </div>
     <p class="muted small">Rename sounds, loop them or set keyboard shortcuts in the Zyclipra app.</p>
   </dialog>
+
+  <footer class="site-foot muted small">
+    <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a> · <a href="/eula.html">EULA</a> · <a href="/cookies.html">Cookies</a> · <a href="/refunds.html">Refunds</a>
+  </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>

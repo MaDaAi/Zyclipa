@@ -44,4 +44,10 @@ $jp = 'jpackage'
 if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin/jpackage.exe'))) { $jp = Join-Path $env:JAVA_HOME 'bin/jpackage.exe' }
 & $jp @jpArgs
 if ($LASTEXITCODE -ne 0) { throw "jpackage failed ($LASTEXITCODE)" }
+# Licence and third-party notices travel with the app (required by the bundled components' licences).
+$img = Join-Path $Dest 'Zyclipra'
+if (Test-Path $img) {
+    Copy-Item (Join-Path $root 'LICENSE') (Join-Path $img 'LICENSE.txt') -Force
+    Copy-Item (Join-Path $root 'packaging/THIRD-PARTY-NOTICES.txt') (Join-Path $img 'THIRD-PARTY-NOTICES.txt') -Force
+}
 Write-Host "Done: $Dest"

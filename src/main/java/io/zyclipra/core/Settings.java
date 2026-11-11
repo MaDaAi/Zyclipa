@@ -219,6 +219,16 @@ public final class Settings {
 
     public static final String[] CHANNELS = {"game", "chat", "media", "aux", "mic", "master"};
 
+    /** Control characters and text-direction overrides: never allowed in names (they can disguise text in lists and logs). */
+    public static final java.util.regex.Pattern UNSAFE_TEXT = java.util.regex.Pattern.compile("[\\p{Cc}\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069]");
+
+    /** A name with unsafe characters removed, trimmed and cut to {@code max} characters. */
+    public static String clean(String s, int max) {
+        if (s == null) return null;
+        String c = UNSAFE_TEXT.matcher(s).replaceAll("").strip();
+        return c.length() > max ? c.substring(0, max) : c;
+    }
+
     public Settings sanitize() {
         if (general == null) general = new General();
         if (recording == null) recording = new Recording();
@@ -310,7 +320,12 @@ public final class Settings {
         if (s.sounds == null) s.sounds = new ArrayList<>();
         s.sounds.removeIf(x -> x == null || x.id == null || x.file == null);
         if (s.categories == null || s.categories.isEmpty()) s.categories = new ArrayList<>(List.of("General"));
+        s.categories.replaceAll(c -> clean(c, 30));
+        s.categories.removeIf(c -> c == null || c.isBlank());
+        if (s.categories.isEmpty()) s.categories.add("General");
         for (Sound x : s.sounds) {
+            x.name = clean(x.name, 80);
+            x.category = clean(x.category, 30);
             if (x.name == null || x.name.isBlank()) x.name = "Sound";
             if (x.category == null || x.category.isBlank()) x.category = "General";
             if (!s.categories.contains(x.category)) s.categories.add(x.category);

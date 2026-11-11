@@ -7,6 +7,8 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import io.zyclipra.core.Settings;
+
 import java.util.regex.Pattern;
 
 /**
@@ -22,6 +24,7 @@ import java.util.regex.Pattern;
 public final class Commands {
     public record Reply(int status, JsonElement body) { }
 
+    private static final Pattern UNSAFE_TEXT = Settings.UNSAFE_TEXT;
     private static final Pattern COMMAND_ID = Pattern.compile("[A-Za-z0-9_-]{8,64}");
     private static final long KEEP_MS = 10 * 60_000L;
     static final int SOUND_BURST = 10;
@@ -155,6 +158,8 @@ public final class Commands {
         if (!a.has(k) || !a.get(k).isJsonPrimitive()) throw new IllegalArgumentException(k + " is required");
         String s = a.get(k).getAsString();
         if (s.length() > max) throw new IllegalArgumentException(k + " too long");
+        // No control characters or text-direction tricks (they can disguise names in lists and logs).
+        if (UNSAFE_TEXT.matcher(s).find()) throw new IllegalArgumentException(k + " contains characters that aren't allowed");
         return s;
     }
 
