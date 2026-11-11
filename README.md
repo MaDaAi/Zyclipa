@@ -93,30 +93,34 @@ and a reboot, and you should only install drivers you trust):
 | Equalizer | 9-band parametric (frequency, gain, Q), presets, live curve, on/off | biquad filters (RBJ cookbook) |
 | Microphone | gain, noise gate, compressor, limiter, noise suppression, monitoring, routing to a virtual cable | Java Sound capture + Zyclipra's own DSP (no paid libraries) |
 | Soundboard | import MP3/WAV/OGG/FLAC/M4A…, collections, rename, volume, loop, stop/replay, global shortcuts, two outputs at once | files converted once to 48 kHz WAV and played from memory |
-| Google Drive | optional; sync only the clips you tick; progress, retries, resume after interruption; disconnect revokes the token | OAuth 2.0 with PKCE, loopback redirect, `drive.file` scope, resumable uploads, token encrypted with Windows DPAPI |
-| Remote dashboard | status, start/stop recording, replay on/off/save, screenshot, recent clips, live levels, channel volumes, trigger sounds | HTTPS with a certificate made on your PC, pairing code login, rate limiting, CSRF protection; local network only |
+| Google Drive | optional; automatic or manual upload into Zyclipra/Clips, Recordings, Screenshots; queue with states, progress, retry, cancel; download back; delete cloud copy; disconnect revokes the token | OAuth 2.0 + PKCE in the system browser, `drive.file` scope, resumable uploads verified by MD5, persistent queue, token in Windows Credential Manager |
+| Dashboard | clips page (play, download, upload to Drive), Clip it / record / screenshot, Google Drive status and preferences, account and sessions, mixer and soundboard | HTTPS with a certificate made on your PC, username + Argon2id password, session cookies, rate limiting, CSRF protection; this PC by default, home network / Tailscale by choice |
 
-## Setting up Google Drive sync (optional)
-1. In https://console.cloud.google.com create a project, enable the **Google Drive API**.
-2. Create an **OAuth client ID** of type **Desktop app**. Configure the consent screen
-   (External, add yourself as a test user).
-3. In Zyclipra: Settings → Cloud, tick "Turn on", paste the client ID (and the client secret
-   Google shows for desktop clients – it is not secret for installed apps, but Zyclipra never
-   ships one), click **Connect Google account** and approve in the browser.
-4. In Clips, tick "Sync this clip to Google Drive" or press "Upload now".
+## Google Drive (optional)
+Back up clips, recordings and screenshots to *My Drive › Zyclipra*, automatically or one at a time.
+Your PC stays the main library; nothing is removed from it unless you choose that.
 
-Only the clips you choose are uploaded, into a "Zyclipra Clips" folder. Zyclipra can only see
-files it created there (`drive.file`). Disconnect deletes the local token and revokes it at Google.
+1. Make a free Google "OAuth client" (Desktop app) once – step by step in
+   [docs/cloud-and-hosting.md](docs/cloud-and-hosting.md#connecting-google-drive).
+2. *Settings › Cloud & Sync*: paste the client ID and secret, press **Connect Google account**.
+3. Turn on **Automatic upload**, or upload single clips from the clip menu or the editor.
 
-## Remote dashboard (optional)
-Settings → Remote dashboard → tick "Turn on", **Apply**. A pairing code is shown once; make a new
-one any time (this signs out all browsers). By default it only listens on this PC
-(`https://localhost:47820`). Tick "Allow … home network" to use it from your phone at the
-shown address. Your browser warns about the self-signed certificate once – check that the
-fingerprint matches the one in Settings.
+Sign-in is Google's own OAuth 2.0 + PKCE in your browser, with the `drive.file` scope (Zyclipra
+only sees files it made). The token is kept in Windows Credential Manager. Uploads resume after
+interruptions, are checked against the local file's checksum, and never create duplicates.
 
-Zyclipra never opens ports on your router. For access away from home use a VPN
-(WireGuard, Tailscale) instead of port forwarding.
+## Dashboard and hosting (optional)
+A web page served by Zyclipra on your PC: clip, record, browse/download clips, Google Drive status,
+mixer and soundboard – from your phone or another PC.
+
+1. *Settings › Hosting*: create a dashboard **username and password** (there's no default account).
+2. Press **Start dashboard**, then open `https://localhost:47820`.
+3. Optionally allow **devices on my home network**, or – for away from home – **Private VPN
+   (Tailscale)**, which keeps the dashboard off the internet.
+
+Public internet access is possible only behind your own HTTPS reverse proxy, off by default and
+not recommended. Details, security notes and troubleshooting:
+[docs/cloud-and-hosting.md](docs/cloud-and-hosting.md).
 
 ## Privacy and security
 - No telemetry, no accounts, no background uploads. Data folder: `%APPDATA%\Zyclipra`, logs in `logs\`.
@@ -129,7 +133,8 @@ See `PROGRESS.md` for the full, current list. The main ones:
 - The EQ and mic effects shape the audio Zyclipra produces (your processed mic and the soundboard). Changing other apps' sound itself (e.g. EQ on a game) needs an audio driver (APO), which Zyclipra does not install.
 - Capturing game/desktop **sound** in recordings needs a capture device that carries it ("Stereo Mix", or a virtual cable the game outputs to). Direct WASAPI loopback capture is planned.
 - `gdigrab` captures the desktop; exclusive full-screen games may show black – use borderless windowed mode.
-- Google sign-in for the dashboard isn't possible over a home-network IP address (Google only allows localhost or public domains as sign-in targets), so the dashboard uses a pairing code.
+- Dashboard sign-in is a username and password you create in the app; signing in to the dashboard with a Google account isn't offered (Google only allows localhost or public domains as sign-in targets).
+- Google Drive needs a free Google Cloud "OAuth client" that you create once; while its consent screen is in Testing mode Google asks you to reconnect every 7 days.
 
 ## Project layout
 ```

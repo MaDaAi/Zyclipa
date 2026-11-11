@@ -2,6 +2,39 @@
 
 _Last updated: 2026-11-09 · version 0.1.0_
 
+## Round 10 (2026-11-11): Google Drive sync, dashboard sign-in, hosting modes
+
+**Built**
+- *Dashboard sign-in*: username + password created in Settings › Hosting (no default account; the dashboard can't start without it). Argon2id hashes (Bouncy Castle), HttpOnly/Secure/SameSite=Strict session cookie (12 h idle, 7 days max), per-address and global rate limits, session list and revoke, password change needs the current password and signs out other sessions. The pairing code was removed.
+- *Hosting*: this PC only by default. Home network and private VPN (Tailscale ranges) are separate switches. Public mode only listens on loopback behind the owner's own HTTPS reverse proxy, needs a 12+ character password, and is switched on only after Zyclipra reaches itself through the public https:// address with a trusted certificate. The page also has port-conflict reporting, Start/Stop/Restart, Copy/Open address, and a certificate export for the proxy. External hosting is documented as not available.
+- *Google sign-in*: PKCE loopback flow in the system browser. Scopes `openid email profile drive.file`. Name, email and picture are shown. A revoked or expired sign-in shows "Reconnect". The refresh token lives in Windows Credential Manager (`Zyclipra/google-drive`, own JNA binding), and the old DPAPI file is migrated.
+- *Drive sync*:
+  - Folders Zyclipra/Clips, Recordings and Screenshots.
+  - A persistent queue (`sync-queue.json`) with states local/queued/uploading/synced/failed/unavailable.
+  - Two uploads at once, exponential backoff, resumable sessions that survive restarts.
+  - Completion verified by size + MD5. Files are tagged with `appProperties.zyclipraId`, so retries never duplicate.
+  - Automatic upload per kind, cancel, retry, cloud-copy check, delete cloud copy (with confirmation), download back, and disconnect (revokes; keeps files and queue).
+  - Optional "free up space" moves verified uploads to the Recycle Bin, off by default and confirmed.
+- *Desktop UI*: Settings › Cloud & Sync and Settings › Hosting pages. A Google Drive box in the clip editor; clip menu shows the sync state.
+- *Web dashboard*:
+  - Clip cards show sync badges; the player has Upload/Retry/Cancel.
+  - Cloud & Sync tab: account, automatic-upload preferences, queue, retry.
+  - Account tab: change username and password, sessions.
+  - Recording actions now return the desktop's real success or error.
+
+**Verified**
+- `mvnw package`: 55 tests, 0 failures (9 hardware tests skipped).
+  - New `AuthTest`, `RemoteTest` (real HTTPS on loopback) and `CloudSyncTest`. The last one is a **mock**: a local fake of Google's OAuth/Drive endpoints.
+  - `CredentialStoreTest` is a **real** Windows Credential Manager round trip.
+- Self-test with real capture: screenshot, 4.1 s NVENC recording, 6.9 s instant replay – clipping still works.
+- Live in the in-app browser (scratch data, loopback): sign-in (wrong password refused), Account and Cloud tabs, and upload-while-disconnected → "queued" → cancel → "local", with no tokens in responses.
+- Screenshots of the Hosting and Cloud & Sync pages.
+
+**Not verified (needs the owner)**
+- A real Google sign-in, upload and download. This needs the owner's own OAuth client ID; the mocked tests don't prove it.
+- Tailscale access from a phone. Home-network access from another device.
+- Public mode through a real reverse proxy.
+
 ## Round 9 (2026-11-11): logos, clip from the dashboard, private remote access
 
 - **Logos**: the owner's "with background" design is the app icon (window, taskbar, installer `.ico`, dashboard favicon). The design without the background is the in-app logo, shown at the top of the rail and in the dashboard header. Sources are in `packaging/zyclipra.svg` and `packaging/zyclipra-logo.svg`.
