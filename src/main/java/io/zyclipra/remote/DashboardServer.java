@@ -344,6 +344,13 @@ public final class DashboardServer {
             case "GET status" -> send(ex, 200, control.status());
             case "GET sounds" -> send(ex, 200, control.sounds());
             case "POST web/logout" -> { auth.logout(token); send(ex, 200, json("ok", "true")); }
+            // Same actions as the WebRTC link (e.g. reading this PC's clips): {"a": action, "b": args}.
+            case "POST call" -> {
+                String action = opt(body, "a");
+                JsonObject args = body.has("b") && body.get("b").isJsonObject() ? body.getAsJsonObject("b") : new JsonObject();
+                Commands.Reply r = RtcBridge.route(control, commands, sessionId, ex.getRequestHeaders().getFirst("X-Command-Id"), action == null ? "" : action, args);
+                send(ex, r.status(), r.body());
+            }
             default -> send(ex, 403, json("error", "Use the dashboard on the PC for that."));
         }
     }

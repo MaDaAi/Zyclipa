@@ -141,15 +141,61 @@ public final class RtcBridge {
         }
     }
 
-    /** Same rules as the website's HTTPS API: status, soundboard and the remote commands – nothing else. */
     Commands.Reply handle(String caller, String id, String action, JsonObject args) {
-        return switch (action) {
-            case "status" -> new Commands.Reply(200, control.status());
-            case "sounds" -> new Commands.Reply(200, control.sounds());
-            default -> Commands.isCommand(action) && !action.startsWith("cloud/")
-                    ? commands.run(caller, id, action, args)
-                    : new Commands.Reply(403, (JsonElement) Commands.ok("not allowed"));
-        };
+        return route(control, commands, caller, id, action, args);
+    }
+
+    /** Largest clip piece per message (base64 of it stays under the 64 KB Safari accepts). */
+    static final int PART = 36 * 1024;
+
+    /**
+     * What the website may do, over WebRTC or HTTPS alike: status, soundboard, the remote commands and reading
+     * this PC's clips – not the account, sessions, Google Drive or settings.
+     */
+    public static Commands.Reply route(RemoteControl control, Commands commands, String caller, String id, String action, JsonObject args) {
+        try {
+            return switch (action) {
+                case "status" -> new Commands.Reply(200, control.status());
+                case "sounds" -> new Commands.Reply(200, control.sounds());
+                case "clips" -> new Commands.Reply(200, control.clips(Math.max(1, Math.min(200, args.has("limit") ? args.get("limit").getAsInt() : 60))));
+                case "clip/thumb" -> {
+                    var f = control.clipThumbnail(clipId(args));
+                    if (f.isEmpty()) yield new Commands.Reply(404, Commands.ok("no thumbnail"));
+                    JsonObject o = new JsonObject();
+                    o.addProperty("data", java.util.Base64.getEncoder().encodeToString(java.nio.file.Files.readAllBytes(f.get())));
+                    yield new Commands.Reply(200, o);
+                }
+                case "clip/part" -> {
+                    var f = control.clipFile(clipId(args));
+                    if (f.isEmpty()) yield new Commands.Reply(404, Commands.ok("That clip isn't on the PC any more."));
+                    long offset = args.has("offset") ? args.get("offset").getAsLong() : 0;
+                    try (var raf = new java.io.RandomAccessFile(f.get().toFile(), "r")) {
+                        long size = raf.length();
+                        if (offset < 0 || offset > size) yield new Commands.Reply(400, Commands.ok("bad offset"));
+                        byte[] b = new byte[(int) Math.min(PART, size - offset)];
+                        raf.seek(offset);
+                        raf.readFully(b);
+                        JsonObject o = new JsonObject();
+                        o.addProperty("size", size);
+                        o.addProperty("data", java.util.Base64.getEncoder().encodeToString(b));
+                        yield new Commands.Reply(200, o);
+                    }
+                }
+                default -> Commands.isCommand(action) && !action.startsWith("cloud/")
+                        ? commands.run(caller, id, action, args)
+                        : new Commands.Reply(403, (JsonElement) Commands.ok("not allowed"));
+            };
+        } catch (IllegalArgumentException e) {
+            return new Commands.Reply(400, Commands.ok(e.getMessage()));
+        } catch (java.io.IOException e) {
+            return new Commands.Reply(500, Commands.ok("Couldn't read that clip."));
+        }
+    }
+
+    private static String clipId(JsonObject a) {
+        String s = a.has("id") && a.get("id").isJsonPrimitive() ? a.get("id").getAsString() : "";
+        if (!s.matches("[A-Za-z0-9_-]{1,80}")) throw new IllegalArgumentException("bad clip id");
+        return s;
     }
 
     private synchronized void drop(String id) {
