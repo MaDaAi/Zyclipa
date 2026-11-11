@@ -1,0 +1,88 @@
+/* Zyclipra remote dashboard – same slate palette as the desktop app. */
+:root { --accent: #5B6CF9; --bg: #1E2228; --card: #2B3039; --card2: #343A45; --well: #20242B; --line: #363C47; --text: #E6E8EC; --muted: #8E95A2;
+        --danger: #F04452; --ok: #2BD9A0; --warn: #F5A524; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; padding: 0 16px 40px; }
+header { display: flex; align-items: center; gap: 12px; padding: 14px 0; max-width: 1400px; margin: 0 auto 6px; border-bottom: 1px solid var(--line); }
+header h1 { font-size: 18px; margin: 0; font-weight: 700; }
+.logo { display: block; }
+.grow { flex: 1; }
+nav { display: flex; gap: 4px; margin-left: 18px; }
+.tab { background: transparent; border-color: transparent; font-weight: 600; font-size: 15px; padding: 5px 12px; border-radius: 4px; }
+.tab.on { background: var(--accent); color: #fff; }
+main, #login { max-width: 1400px; margin: 0 auto; }
+#login { margin-top: 40px; }
+.narrow { max-width: 420px !important; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
+.card { background: var(--card); border-radius: 4px; padding: 16px 20px; margin-bottom: 14px; }
+h2 { font-size: 15px; margin: 0 0 10px; }
+.big { font-size: 24px; font-weight: 700; margin: 4px 0 12px; }
+.big.rec { color: var(--danger); }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.caps { text-transform: uppercase; letter-spacing: .3px; }
+.error-text { color: var(--danger); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.between { justify-content: space-between; }
+button, .button { background: var(--card2); color: var(--text); border: 1px solid transparent; border-radius: 3px; padding: 8px 14px; font: inherit; cursor: pointer;
+                  text-decoration: none; display: inline-block; }
+button:hover, .button:hover { filter: brightness(1.15); }
+button:disabled { opacity: .4; cursor: default; filter: none; }
+button:focus-visible, input:focus-visible, select:focus-visible, .button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.primary { background: var(--accent); color: #fff; font-weight: 600; }
+.danger { background: var(--danger); color: #fff; font-weight: 600; }
+.ghost { background: transparent; white-space: nowrap; }
+input, select { background: var(--well); color: var(--text); border: 1px solid #4A505C; border-radius: 3px; padding: 7px 10px; font: inherit; }
+form { display: flex; gap: 8px; }
+form input { flex: 1; letter-spacing: 2px; text-transform: uppercase; }
+
+/* clips */
+.toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 14px 0 4px; }
+.page-title { font-size: 16px; margin: 0; text-transform: uppercase; }
+#search { width: 220px; }
+.day { font-size: 13px; margin: 18px 0 10px; text-transform: uppercase; font-weight: 700; }
+.day .muted { font-weight: 400; text-transform: none; margin-left: 6px; }
+.clip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 16px; }
+.clip-card { padding: 0; background: var(--card); border-radius: 4px; overflow: hidden; text-align: left; display: flex; flex-direction: column; border: 2px solid transparent; }
+.clip-card:hover { background: #313742; filter: none; }
+.clip-card:focus-visible { border-color: var(--accent); outline: none; }
+.thumb { position: relative; aspect-ratio: 16 / 9; background: #14171C; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb.no-thumb::after { content: "▶"; position: absolute; inset: 0; display: grid; place-items: center; color: #4A505C; font-size: 32px; }
+.pill { position: absolute; top: 10px; right: 10px; background: rgba(18, 20, 25, .85); color: #fff; border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+.star { position: absolute; bottom: 8px; right: 10px; color: var(--warn); font-size: 16px; }
+.clip-body { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px 14px; }
+.clip-body .game { font-size: 11px; color: var(--muted); }
+.clip-body .title { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clip-body .meta { font-size: 11px; color: var(--muted); }
+.empty { padding: 40px 0; text-align: center; }
+
+dialog { background: var(--card); color: var(--text); border: none; border-radius: 6px; padding: 18px 20px; width: min(1100px, 96vw); max-height: 94vh; }
+dialog::backdrop { background: rgba(8, 10, 14, .78); }
+.player-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.player-head h2 { font-size: 18px; margin: 2px 0 10px; }
+.player-head p { margin: 0; }
+.player-media { background: #000; border-radius: 4px; overflow: hidden; display: grid; place-items: center; min-height: 200px; }
+.player-media video, .player-media img { width: 100%; max-height: 70vh; display: block; object-fit: contain; }
+#player-desc { margin: 4px 0 12px; white-space: pre-wrap; }
+
+/* control */
+.chan { display: grid; grid-template-columns: 100px 1fr 160px 80px; gap: 10px; align-items: center; padding: 6px 0; }
+.chan-name { font-weight: 600; }
+.meter { height: 8px; background: #1B1F25; border-radius: 4px; overflow: hidden; }
+.meter div { height: 100%; width: 0; background: linear-gradient(to right, var(--ok) 0%, var(--ok) 65%, var(--warn) 85%, var(--danger) 100%); transition: width .12s; }
+input[type=range] { padding: 0; accent-color: var(--accent); border: none; background: transparent; }
+.mute.on { background: #4a1b22; border-color: var(--danger); color: #ffd5da; }
+.pads { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.pad { padding: 18px 10px; border-radius: 4px; }
+.pad.playing { border-color: var(--accent); background: #2a2f58; }
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--card2); border-radius: 4px; padding: 10px 16px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+.toast.error { border-left: 3px solid var(--danger); }
+@media (max-width: 640px) {
+  .chan { grid-template-columns: 80px 1fr; }
+  #search { width: 100%; }
+  .toolbar select { flex: 1; }
+  nav { margin-left: 4px; }
+}

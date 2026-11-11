@@ -1,0 +1,23 @@
+# Build output and project-local tools (downloaded by mvnw)
+target/
+dist/
+.tools/
+.m2/
+node_modules/
+
+# Local test output and recordings – never commit videos or screenshots of someone's screen
+shots/
+*.mp4
+*.mkv
+*.mov
+*.log
+
+# Secrets and per-user data (the app keeps these in %APPDATA%\Zyclipra, but just in case)
+*.p12
+*.jks
+*.key
+*.pem
+settings.json
+library.json
+.env
+.claude/

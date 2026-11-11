@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="linear-gradient-1" x1="130" y1="143.40067" x2="464.45503" y2="738.69063" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a52aff"/>
+      <stop offset="0.52" stop-color="#5e48ff"/>
+      <stop offset="1" stop-color="#00e8e8"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="653" y1="245" x2="1107.84219" y2="453.16468" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a52aff"/>
+      <stop offset="0.52" stop-color="#5e48ff"/>
+      <stop offset="1" stop-color="#00e8e8"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-3" x1="216" y1="712" x2="339.98455" y2="1049.0041" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a52aff"/>
+      <stop offset="0.52" stop-color="#5e48ff"/>
+      <stop offset="1" stop-color="#00e8e8"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-4" x1="201.87878" y1="303" x2="560.72389" y2="873.14583" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff67f5"/>
+      <stop offset="0.36" stop-color="#9828f9"/>
+      <stop offset="0.68" stop-color="#4866ff"/>
+      <stop offset="1" stop-color="#00e8e5"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-5" x1="292" y1="419.98024" x2="371" y2="419.98024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff3ff"/>
+      <stop offset="1" stop-color="#c9ccff"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-6" x1="494.84455" y1="446.48024" x2="606.84455" y2="446.48024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff3ff"/>
+      <stop offset="1" stop-color="#c9ccff"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-7" x1="806.91621" y1="406.44071" x2="958.959" y2="650.93716" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e04aff"/>
+      <stop offset="1" stop-color="#00e9ed"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-8" x1="775.5" y1="590" x2="696.5" y2="590" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff3ff"/>
+      <stop offset="1" stop-color="#c9ccff"/>
+    </linearGradient>
+  </defs>
+  <title>zyclipra-editable.svg</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <path id="orbit-upper" d="M130 535 C150 345 334 189 514 154 C650 126 755 155 827 223 L844.58184 286.72632 C757.58184 208.72632 639 181 527 203 C337 239 202 359 130 535 Z" fill="url(#linear-gradient-1)"/>
+    <path id="orbit-right" d="M843 245 C938 352 950 523 896 650 C857 738 767 817 653 846 L708 788 C846 718 901 603 890 462 C885 385 865 316 843 245 Z" fill="url(#linear-gradient-2)"/>
+    <path id="orbit-bottom" d="M216 712 C273 826 408 877 541 873 C616 871 679 856 736 827 C632 906 465 926 332 876 C264 850 224 798 216 712 Z" fill="url(#linear-gradient-3)"/>
+    <path id="dark-plaque" d="M332.1368 377.41121 L742.04806 377.41121 C783.20947 377.41121 816.57738 402.47103 816.57738 433.3839 L816.57738 574.68083 C816.57738 605.5937 783.20947 630.65353 742.04806 630.65353 L332.1368 630.65353 C290.97539 630.65353 257.60748 605.5937 257.60748 574.68083 L257.60748 433.3839 C257.60748 402.47103 290.97539 377.41121 332.1368 377.41121 Z" fill="#10152f"/>
+    <path id="z-shadow" d="M264.77755 286 C264.77755 286 275 286 305 286 L834 286 C860.66667 286 870 297.33333 862 320 L440 646 L834.23529 646 L790.52791 705 L206 705 C206 705 189.33333 705 192 693 L595.83333 361.34009 L263 361.34009 C243 361.34009 197.19836 361.34009 197.19836 361.34009 Z" fill="#0b1231" stroke="#0c1433" stroke-width="24" stroke-linejoin="round"/>
+    <path id="z-ribbon" d="M214 328.66667 C232 310.66667 266.66667 303 298 303 L820 303 C834.66667 303 838 308 830 318 L396 658.30705 L814 658 C823.33333 658 824 662.33333 816 671 L788 701 L214 701 C200.66667 701 198.33333 696 207 686 L653 351 L232 351 C218 351 205.33333 342.66667 214 328.66667 Z" fill="url(#linear-gradient-4)"/>
+    <line id="z-top-highlight" x1="239.87503" y1="306.0007" x2="831.18486" y2="306.33169" fill="none" stroke="#ff8af9" stroke-width="10" stroke-linecap="round"/>
+    <line id="z-bottom-highlight" x1="401" y1="658.30705" x2="822.75" y2="658.30705" fill="none" stroke="#20f6f0" stroke-width="9" stroke-linecap="round"/>
+    <path id="viewfinder-left" d="M292 484.98024 L292 439.98024 C292 426.6469 299 419.98024 313 419.98024 L371 419.98024" fill="none" stroke="url(#linear-gradient-5)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+    <path id="play" d="M494.84455 455.38933 C494.84455 446.05599 498.84455 444.05599 506.84455 449.38933 L599.84455 507.38933 C609.17788 512.72266 609.17788 518.72266 599.84455 525.38933 L506.84455 583.38933 C498.84455 588.05599 494.84455 585.05599 494.84455 574.38933 Z" fill="url(#linear-gradient-6)" stroke="#10152f" stroke-width="20" stroke-linejoin="round"/>
+    <path d="M475.81591 157.92816 C475.81591 129.88791 499.28704 107.15679 528.24013 107.15679 C557.19321 107.15679 580.66434 129.88791 580.66434 157.92816 L580.66434 874.07184 C580.66434 902.11209 557.19321 924.84321 528.24013 924.84321 C499.28704 924.84321 475.81591 902.11209 475.81591 874.07184 Z M310.26576 328.94755 C310.26576 300.9073 333.73689 278.17617 362.68998 278.17617 C391.64307 278.17617 415.11419 300.9073 415.11419 328.94755 L415.11419 761.84036 C415.11419 789.88062 391.64307 812.61174 362.68998 812.61174 C333.73689 812.61174 310.26576 789.88062 310.26576 761.84036 Z M641.36606 344.98062 C641.36606 316.94036 664.83719 294.20924 693.79027 294.20924 C722.74336 294.20924 746.21449 316.94036 746.21449 344.98062 L746.21449 767.18472 C746.21449 795.22497 722.74336 817.9561 693.79027 817.9561 C664.83719 817.9561 641.36606 795.22497 641.36606 767.18472 Z M144.71562 457.21209 C144.71562 429.17183 168.18674 406.44071 197.13983 406.44071 C226.09292 406.44071 249.56404 429.17183 249.56404 457.21209 L249.56404 681.67503 C249.56404 709.71528 226.09292 732.44641 197.13983 732.44641 C168.18674 732.44641 144.71562 709.71528 144.71562 681.67503 Z M806.91621 457.21209 C806.91621 429.17183 830.38733 406.44071 859.34042 406.44071 C888.29351 406.44071 911.76464 429.17183 911.76464 457.21209 L911.76464 681.67503 C911.76464 709.71528 888.29351 732.44641 859.34042 732.44641 C830.38733 732.44641 806.91621 709.71528 806.91621 681.67503 Z" fill="url(#linear-gradient-7)" stroke="#10152f" stroke-width="5" stroke-miterlimit="10" display="none"/>
+    <path id="viewfinder-left-2" data-name="viewfinder-left" d="M775.5 525 L775.5 570 C775.5 583.33333 768.5 590 754.5 590 L696.5 590" fill="none" stroke="url(#linear-gradient-8)" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/>
+    <polygon points="788,701 824.34724,654.20833 834.23529,654.20833" fill="#10152f" stroke="#10152f" stroke-miterlimit="10"/>
+    <polygon points="277.14639,299.14252 228.16754,350.78848 192.53421,351.93427 252.20234,284.70274" fill="#0b1231" stroke="#0c1433" stroke-miterlimit="10"/>
+  </g>
+</svg>

@@ -1,0 +1,65 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Install FFmpeg (for the clip/trim tests)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+      - name: Install FFmpeg (for the clip/trim tests)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg xvfb
+      - name: Type-check the dashboard
+        working-directory: src/main/web
+        run: npx -y -p typescript@5.6.3 tsc -p tsconfig.json --noEmit
+      - name: Build and test
+        run: mvn -B -Dmaven.repo.local=${{ runner.temp }}/m2 package
+      - name: Self-test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          java -jar target/zyclipra.jar --self-test target/selftest.json
+          Get-Content target/selftest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zyclipra-${{ matrix.os }}
+          path: |
+            target/zyclipra.jar
+            target/selftest.json
+
+  installer:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build jar
+        run: mvn -B -DskipTests package
+      - name: Windows installer (MSI via jpackage + WiX)
+        shell: pwsh
+        run: ./packaging/build-installer.ps1 -Type msi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zyclipra-windows-installer
+          path: dist/*.msi

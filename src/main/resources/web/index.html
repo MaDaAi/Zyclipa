@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zyclipra</title>
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <img src="/icon.png" alt="" class="logo" width="30" height="30">
+    <h1>Zyclipra</h1>
+    <nav id="nav" hidden>
+      <button id="tab-clips" class="tab on" aria-pressed="true">Clips</button>
+      <button id="tab-control" class="tab" aria-pressed="false">Control</button>
+    </nav>
+    <span class="grow"></span>
+    <button id="logout" class="ghost" hidden>Sign out</button>
+  </header>
+
+  <section id="login" class="card narrow">
+    <h2>Sign in</h2>
+    <p class="muted">Enter the pairing code shown in Zyclipra under Settings → Remote dashboard.</p>
+    <form id="login-form">
+      <input id="code" autocomplete="one-time-code" placeholder="ABCDE-FGHJK" maxlength="20" aria-label="Pairing code" required>
+      <button type="submit" class="primary">Sign in</button>
+    </form>
+    <p id="login-error" class="error-text" role="alert"></p>
+  </section>
+
+  <main id="clips-view" hidden>
+    <div class="toolbar">
+      <h2 class="page-title">All clips <span id="clip-count" class="muted"></span></h2>
+      <span class="grow"></span>
+      <input id="search" type="search" placeholder="Search clips" aria-label="Search clips">
+      <select id="game" aria-label="Game"><option value="">All games</option></select>
+      <select id="kind" aria-label="Show">
+        <option value="">Everything</option>
+        <option value="video">Videos</option>
+        <option value="screenshot">Screenshots</option>
+        <option value="favorite">Favourites ★</option>
+      </select>
+      <select id="sort" aria-label="Sort">
+        <option value="new">Newest</option>
+        <option value="old">Oldest</option>
+        <option value="long">Longest</option>
+        <option value="big">Largest</option>
+      </select>
+    </div>
+    <p id="clip-stats" class="muted small"></p>
+    <div id="clip-groups"></div>
+  </main>
+
+  <main id="control-view" hidden>
+    <div class="grid">
+      <section class="card">
+        <h2>Recording</h2>
+        <p id="rec-state" class="big">–</p>
+        <div class="row"><button id="rec-btn" class="danger">Start recording</button><button id="shot-btn">Screenshot</button></div>
+      </section>
+      <section class="card">
+        <h2>Instant replay</h2>
+        <p id="replay-state" class="big">–</p>
+        <div class="row"><button id="replay-btn">Turn replay on</button><button id="save-btn" class="primary">Save replay</button></div>
+      </section>
+    </div>
+    <section class="card">
+      <h2>Mixer</h2>
+      <div id="mixer"></div>
+    </section>
+    <section class="card">
+      <div class="row between"><h2>Soundboard</h2><button id="stop-sounds">Stop all</button></div>
+      <div id="sounds" class="pads"></div>
+    </section>
+    <p id="sys" class="muted small"></p>
+  </main>
+
+  <dialog id="player" aria-labelledby="player-title">
+    <div class="player-head">
+      <div>
+        <p id="player-game" class="muted small caps"></p>
+        <h2 id="player-title"></h2>
+      </div>
+      <button id="player-close" class="ghost" aria-label="Close">✕</button>
+    </div>
+    <div id="player-media" class="player-media"></div>
+    <p id="player-meta" class="muted small"></p>
+    <p id="player-desc"></p>
+    <div class="row">
+      <a id="player-download" class="button primary" href="#" download>Download</a>
+      <button id="player-prev">‹ Previous</button>
+      <button id="player-next">Next ›</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+</body>
+</html>

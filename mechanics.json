@@ -1,0 +1,335 @@
+{
+  "version": 1,
+  "values": [
+    {
+      "name": "instant replay minimum",
+      "group": "recording",
+      "value": 15,
+      "unit": "s",
+      "source": "person's request (15 s to 5 min)"
+    },
+    {
+      "name": "instant replay maximum",
+      "group": "recording",
+      "value": 300,
+      "unit": "s",
+      "source": "person's request (15 s to 5 min)"
+    },
+    {
+      "name": "instant replay default",
+      "group": "recording",
+      "value": 60,
+      "unit": "s",
+      "source": "reference/picture-12.png (default clip settings shown)"
+    },
+    {
+      "name": "replay segment length",
+      "group": "recording",
+      "value": 2,
+      "unit": "s",
+      "source": "Zyclipra design (ReplayBuffer.SEGMENT_SEC)"
+    },
+    {
+      "name": "keyframe interval",
+      "group": "recording",
+      "value": 2,
+      "unit": "s",
+      "source": "Zyclipra design (GOP = fps x 2)"
+    },
+    {
+      "name": "default frame rate",
+      "group": "recording",
+      "value": 30,
+      "unit": "fps",
+      "source": "reference/picture-12.png (default clip settings shown)"
+    },
+    {
+      "name": "frame rate range",
+      "group": "recording",
+      "value": "10-144",
+      "unit": "fps",
+      "estimated": true
+    },
+    {
+      "name": "default video bitrate",
+      "group": "recording",
+      "value": 20000,
+      "unit": "kbps (\"High\")",
+      "estimated": true
+    },
+    {
+      "name": "bitrate range",
+      "group": "recording",
+      "value": "1000-100000",
+      "unit": "kbps",
+      "estimated": true
+    },
+    {
+      "name": "audio bitrate",
+      "group": "recording",
+      "value": 160,
+      "unit": "kbps AAC",
+      "estimated": true
+    },
+    {
+      "name": "default container",
+      "group": "recording",
+      "value": "mp4",
+      "source": "person's request (MP4 and MKV)"
+    },
+    {
+      "name": "encoder preference",
+      "group": "recording",
+      "value": "NVENC > QuickSync > AMF > x264",
+      "source": "measured: test-encode on this PC (h264_nvenc works, qsv/amf fail)"
+    },
+    {
+      "name": "minimum free space to start recording",
+      "group": "recording",
+      "value": 1024,
+      "unit": "MB",
+      "estimated": true
+    },
+    {
+      "name": "hotkey start/stop recording",
+      "group": "controls",
+      "value": "Alt+F9",
+      "estimated": true
+    },
+    {
+      "name": "hotkey save replay",
+      "group": "controls",
+      "value": "Alt+F10",
+      "estimated": true
+    },
+    {
+      "name": "hotkey toggle replay",
+      "group": "controls",
+      "value": "Alt+Shift+F10",
+      "estimated": true
+    },
+    {
+      "name": "hotkey screenshot",
+      "group": "controls",
+      "value": "Alt+F12",
+      "estimated": true
+    },
+    {
+      "name": "hotkey stop all sounds",
+      "group": "controls",
+      "value": "Ctrl+Alt+End",
+      "estimated": true
+    },
+    {
+      "name": "hotkey mute microphone",
+      "group": "controls",
+      "value": "Ctrl+Alt+M",
+      "estimated": true
+    },
+    {
+      "name": "section shortcuts",
+      "group": "controls",
+      "value": "Ctrl+1..5",
+      "estimated": true
+    },
+    {
+      "name": "mixer channels",
+      "group": "audio",
+      "value": "Game, Chat, Media, Aux, Microphone, Master",
+      "source": "person's request"
+    },
+    {
+      "name": "equalizer bands",
+      "group": "audio",
+      "value": 9,
+      "source": "person's request"
+    },
+    {
+      "name": "equalizer default centre frequencies",
+      "group": "audio",
+      "value": "32,64,125,250,500,1k,2k,4k,8k",
+      "unit": "Hz",
+      "estimated": true
+    },
+    {
+      "name": "equalizer gain range",
+      "group": "audio",
+      "value": 12,
+      "unit": "+/- dB",
+      "estimated": true
+    },
+    {
+      "name": "equalizer Q range",
+      "group": "audio",
+      "value": "0.1-10",
+      "estimated": true
+    },
+    {
+      "name": "audio processing sample rate",
+      "group": "audio",
+      "value": 48000,
+      "unit": "Hz",
+      "estimated": true
+    },
+    {
+      "name": "mic processing block",
+      "group": "audio",
+      "value": 10,
+      "unit": "ms",
+      "estimated": true
+    },
+    {
+      "name": "noise gate default threshold",
+      "group": "audio",
+      "value": -50,
+      "unit": "dBFS",
+      "estimated": true
+    },
+    {
+      "name": "noise gate hold",
+      "group": "audio",
+      "value": 120,
+      "unit": "ms",
+      "estimated": true
+    },
+    {
+      "name": "compressor default threshold",
+      "group": "audio",
+      "value": -20,
+      "unit": "dBFS",
+      "estimated": true
+    },
+    {
+      "name": "compressor default ratio",
+      "group": "audio",
+      "value": 3,
+      "unit": ":1",
+      "estimated": true
+    },
+    {
+      "name": "limiter default ceiling",
+      "group": "audio",
+      "value": -1,
+      "unit": "dBFS",
+      "estimated": true
+    },
+    {
+      "name": "noise suppression frame",
+      "group": "audio",
+      "value": 512,
+      "unit": "samples (10.7 ms latency)",
+      "estimated": true
+    },
+    {
+      "name": "noise suppression default reduction",
+      "group": "audio",
+      "value": 12,
+      "unit": "dB",
+      "estimated": true
+    },
+    {
+      "name": "level meter range",
+      "group": "hud",
+      "value": "-60 to 0",
+      "unit": "dBFS",
+      "estimated": true
+    },
+    {
+      "name": "level meter refresh",
+      "group": "hud",
+      "value": 80,
+      "unit": "ms",
+      "estimated": true
+    },
+    {
+      "name": "app session refresh",
+      "group": "audio",
+      "value": 1500,
+      "unit": "ms",
+      "estimated": true
+    },
+    {
+      "name": "soundboard import limit",
+      "group": "soundboard",
+      "value": 100,
+      "unit": "MB",
+      "estimated": true
+    },
+    {
+      "name": "soundboard max sound length",
+      "group": "soundboard",
+      "value": 600,
+      "unit": "s",
+      "estimated": true
+    },
+    {
+      "name": "soundboard formats",
+      "group": "soundboard",
+      "value": "wav, mp3, ogg, flac, m4a, aac, opus, wma, aiff",
+      "source": "person's request (MP3 and WAV at least)"
+    },
+    {
+      "name": "Drive upload chunk",
+      "group": "cloud",
+      "value": 2,
+      "unit": "MiB",
+      "source": "Google resumable upload rule: multiple of 256 KiB"
+    },
+    {
+      "name": "Drive upload retries",
+      "group": "cloud",
+      "value": 5,
+      "estimated": true
+    },
+    {
+      "name": "Drive permission",
+      "group": "cloud",
+      "value": "drive.file",
+      "source": "person's request (minimal Drive permissions)"
+    },
+    {
+      "name": "dashboard default port",
+      "group": "remote",
+      "value": 47820,
+      "estimated": true
+    },
+    {
+      "name": "dashboard session lifetime",
+      "group": "remote",
+      "value": 12,
+      "unit": "h",
+      "estimated": true
+    },
+    {
+      "name": "dashboard failed logins before lock-out",
+      "group": "remote",
+      "value": 5,
+      "estimated": true
+    },
+    {
+      "name": "dashboard pairing code length",
+      "group": "remote",
+      "value": 10,
+      "unit": "characters",
+      "estimated": true
+    },
+    {
+      "name": "dashboard listens on",
+      "group": "remote",
+      "value": "127.0.0.1 unless LAN is enabled",
+      "source": "person's request (no public ports)"
+    },
+    {
+      "name": "default resolution",
+      "group": "recording",
+      "value": "1080p",
+      "source": "reference/picture-12.png (default clip settings shown)"
+    },
+    {
+      "name": "default video quality",
+      "group": "recording",
+      "value": "High",
+      "source": "reference/picture-12.png (default clip settings shown)"
+    }
+  ]
+}
