@@ -375,6 +375,12 @@
 .legal-pre, .legal-mono { -fx-font-family: "Consolas", monospace; -fx-font-size: 12.5px; -fx-text-fill: -text; }
 .legal-mono, .legal-mono .content { -fx-control-inner-background: -well; -fx-background-color: -well; }
 
+/* ---------- export dialog ---------- */
+.dialog-root { -fx-background-color: -bg; }
+.export-choice { -fx-background-color: -card; -fx-background-radius: 8; -fx-border-color: -line; -fx-border-radius: 8; -fx-padding: 10 14; -fx-cursor: hand; }
+.export-choice:hover { -fx-border-color: -muted; }
+.export-choice:selected { -fx-border-color: -accent; -fx-border-width: 2; -fx-padding: 9 13; }
+
 /* ---------- light theme (generated) ---------- */
 .root.light {
     -bg: #F3F4F7;

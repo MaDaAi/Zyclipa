@@ -106,6 +106,10 @@ public final class AppContext implements RemoteControl {
         library.scanAsync();
         if (settings.mic.enabled) mic.start();
         updater = new io.zyclipa.update.Updater(VERSION, paths.root().resolve("updates"));
+        if (enableHotkeys) {
+            var t = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> { Thread th = new Thread(r, "game-watch"); th.setDaemon(true); return th; });
+            t.scheduleWithFixedDelay(() -> { try { watchForGames(); } catch (Throwable e) { LOG.fine("game watch: " + e); } }, 10, 5, java.util.concurrent.TimeUnit.SECONDS);
+        }
         if (enableHotkeys && settings.general.checkUpdates) {
             java.util.concurrent.CompletableFuture.runAsync(() -> {
                 try {
@@ -215,6 +219,36 @@ public final class AppContext implements RemoteControl {
             var os = (com.sun.management.OperatingSystemMXBean) java.lang.management.ManagementFactory.getOperatingSystemMXBean();
             return Math.round(os.getProcessCpuLoad() * 1000) / 10.0;
         } catch (Throwable t) { return -1; }
+    }
+
+    private boolean autoReplay;          // instant replay was turned on by the game watcher (not by the person)
+    private int gameTicks;
+    private long lastGameAt;
+
+    /**
+     * Every 5 s: when a game is in front (twice in a row) and instant replay is off, turn it on; when the watcher turned
+     * it on and no game has been in front for 2 minutes, turn it off again. A person's own choice is never overridden.
+     */
+    void watchForGames() {
+        if (!settings.recording.autoReplayInGames || capture.ffmpeg().isEmpty()) return;
+        var f = desktop.foreground();
+        boolean game = io.zyclipa.recording.GameNames.isLikelyGame(f);
+        long now = System.currentTimeMillis();
+        gameTicks = game ? gameTicks + 1 : 0;
+        if (game) lastGameAt = now;
+        if (!replay.running()) {
+            if (autoReplay) autoReplay = false;           // stopped by the person (or it failed): leave it off
+            else if (gameTicks >= 2) {
+                replay.start();
+                autoReplay = true;
+                String name = io.zyclipa.recording.GameNames.gameOf(f.title(), f.process());
+                bus.emit(EventBus.NOTIFY, (name == null ? "Game" : name) + " detected – instant replay is on. Press "
+                        + settings.hotkeys.getOrDefault("saveReplay", "your Clip it keys") + " to save a clip.");
+            }
+        } else if (autoReplay && now - lastGameAt > 120_000) {
+            replay.stop();
+            autoReplay = false;
+        }
     }
 
     /** Asks GitHub for a newer signed release; tells the person once when one is found. */

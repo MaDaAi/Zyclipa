@@ -162,6 +162,12 @@ public final class SettingsView implements View {
         return pageBox("General", "Preferences that apply to all of Zyclipa.",
                 Ui.settingRow("Theme", "Light or dark. “Same as Windows” follows Settings › Personalisation › Colours. A few graphs switch fully after restarting Zyclipa.", themePicker()),
                 Ui.settingRow("Accent colour", "The colour of buttons, switches and highlights.", swatches),
+                Ui.settingRow("Keep running when the window is closed", "Closing Zyclipa hides it by the clock so shortcuts, instant replay and the "
+                        + "dashboard keep working. Right-click the icon there to quit.", sw(ctx.settings.general.runInBackground, "Keep running when closed",
+                        v -> ctx.settings.general.runInBackground = v)),
+                Ui.settingRow("Instant replay when a game starts", "Turns instant replay on by itself while you play (Steam, Epic, Riot, Xbox and other games, "
+                        + "or anything full screen) and off again two minutes after the game closes. It never turns off replay you switched on yourself.",
+                        sw(r.autoReplayInGames, "Instant replay when a game starts", v -> r.autoReplayInGames = v)),
                 Ui.settingRow("Instant replay at start-up", "Start keeping the last few minutes ready to clip as soon as Zyclipa opens.",
                         sw(r.replayEnabled, "Instant replay at start-up", v -> r.replayEnabled = v)),
                 Ui.settingRow("Recording indicator", "Show a small “REC” badge in the corner of your screen while recording, and a flash when a clip is saved.",
@@ -512,8 +518,8 @@ public final class SettingsView implements View {
         Label summary = Ui.label("", "setting-desc");
         Runnable fill = () -> fillQueue(queue, summary);
         fill.run();
-        Button retryAll = Ui.button("Retry failed uploads", Icons.REPLAY, () -> { int n = sync.retry(null); win.toast(n == 0 ? "Nothing to retry." : "Retrying " + n + ".", false); fill.run(); }, "outline");
-        Button check = Ui.button("Check cloud copies", Icons.REFRESH, () -> java.util.concurrent.CompletableFuture.supplyAsync(sync::verifyCloudCopies)
+        Button retryAll = Ui.button("Retry failed uploads", null, () -> { int n = sync.retry(null); win.toast(n == 0 ? "Nothing to retry." : "Retrying " + n + ".", false); fill.run(); }, "outline");
+        Button check = Ui.button("Check cloud copies", null, () -> java.util.concurrent.CompletableFuture.supplyAsync(sync::verifyCloudCopies)
                 .thenAccept(n -> Ui.fx(() -> { win.toast(n == 0 ? "All synced clips are still on Google Drive." : n + " clip(s) are no longer on Google Drive.", n > 0); fill.run(); })), "outline");
         check.setDisable(!connected);
         status.getChildren().addAll(summary, Ui.row(10, retryAll, check), queue);
@@ -559,7 +565,7 @@ public final class SettingsView implements View {
                 row.getChildren().add(pb);
             }
             if (i.state.equals("failed") || i.state.equals("unavailable"))
-                row.getChildren().add(Ui.button(i.state.equals("failed") ? "Retry" : "Upload again", Icons.REPLAY, () -> { sync.retry(i.clipId); fillQueue(queue, summary); }, "outline"));
+                row.getChildren().add(Ui.button(i.state.equals("failed") ? "Retry" : "Upload again", null, () -> { sync.retry(i.clipId); fillQueue(queue, summary); }, "outline"));
             if (i.state.equals("queued") || i.state.equals("uploading") || i.state.equals("failed"))
                 row.getChildren().add(Ui.button("Cancel", null, () -> { try { sync.cancel(i.clipId); } catch (IllegalStateException ignored) { } fillQueue(queue, summary); }, "ghost"));
             if (cloudOnly) {

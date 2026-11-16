@@ -30,10 +30,15 @@ public final class Settings {
         public String ffmpegPath = "";
         /** Look for a newer Zyclipa on GitHub shortly after start (nothing is installed without asking). */
         public boolean checkUpdates = true;
+        /** Closing the window hides Zyclipa in the tray instead of quitting. */
+        public boolean runInBackground = true;
+        public boolean trayHintShown = false;
     }
 
     public static final class Recording {
         public String clipsDir = "";
+        /** Turn instant replay on by itself while a game is in front (and off again after the game closes). */
+        public boolean autoReplayInGames = true;
         public String container = "mp4";      // mp4 | mkv
         public String captureMode = "display"; // display | window
         public int displayIndex = 0;

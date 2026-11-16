@@ -112,6 +112,9 @@ final class ClipEditor {
     private final VBox textList = new VBox(8);
     private final Label caption = new Label();
     private int soundboardTrack = -1;
+    private ToggleButton originalCanvas, tallCanvas;
+    private boolean restoring;
+    private final javafx.animation.PauseTransition saveLater = new javafx.animation.PauseTransition(Duration.millis(500));
     private final VBox soundboardBox = new VBox(8);
 
     ClipEditor(AppContext ctx, MainWindow win, Clip clip, List<Clip> siblings, Runnable close, Consumer<Clip> openOther) {
@@ -129,9 +132,46 @@ final class ClipEditor {
         java.util.Arrays.fill(trackVol, 1.0);
         for (int i = 0; i < clip.audioTrackNames.size(); i++) if (AudioTracks.SOUNDBOARD.equals(clip.audioTrackNames.get(i))) soundboardTrack = i;
         build();
+        restoreEdit();
+        saveLater.setOnFinished(e -> ctx.library.saveEdit(clip, edited() ? currentEdit() : null));
     }
 
     Node node() { return root; }
+
+    /** The editor's changes as they are now (what exports, the soundboard and "Save trim" use). */
+    private Clip.Edit currentEdit() {
+        Clip.Edit e = new Clip.Edit();
+        e.in = in;
+        e.out = out;
+        e.vertical = vertical;
+        e.volumes = trackVol.clone();
+        e.muted = trackMuted.clone();
+        e.texts = new ArrayList<>(texts);
+        return e;
+    }
+
+    /** Puts back the changes made the last time this clip was edited (kept in Zyclipa, not in the file). */
+    private void restoreEdit() {
+        Clip.Edit e = clip.edit;
+        if (e == null) return;
+        restoring = true;
+        try {
+            in = Math.max(0, Math.min(e.in, dur - 0.5));
+            out = Math.max(in + 0.5, Math.min(e.out > 0 ? e.out : dur, dur));
+            if (e.vertical && tallCanvas != null) tallCanvas.setSelected(true);
+            for (int i = 0; i < trackVol.length; i++) {
+                if (i < e.volumes.length && i < trackSliders.size()) trackSliders.get(i).setValue(e.volumes[i]);
+                if (i < e.muted.length && e.muted[i]) setTrackMuted(i, true);
+            }
+            if (e.texts != null) { texts.clear(); texts.addAll(e.texts); rebuildTexts(); }
+            updateTrimFields();
+            layoutTimeline();
+            now = in;
+        } finally {
+            restoring = false;
+        }
+        markDirty();
+    }
 
     void dispose() {
         if (player != null) { player.dispose(); player = null; }
@@ -307,7 +347,7 @@ final class ClipEditor {
 
     private void previewFailed(StackPane stage, StackPane screen, Rectangle verticalFrame, int attempt, String why) {
         if (attempt < 1 && !why.contains("FFmpeg")) { startPreview(stage, screen, verticalFrame, attempt + 1); return; }
-        Button again = Ui.button("Try again", Icons.REPLAY, () -> startPreview(stage, screen, verticalFrame, attempt + 1), "outline");
+        Button again = Ui.button("Try again", null, () -> startPreview(stage, screen, verticalFrame, attempt + 1), "outline");
         Label msg = Ui.label("The preview couldn't load: " + why, "muted");
         msg.setMaxWidth(560);
         VBox box = new VBox(12, msg, again);
@@ -344,6 +384,8 @@ final class ClipEditor {
     private VBox sidePanel(Rectangle verticalFrame) {
         ToggleGroup g = new ToggleGroup();
         ToggleButton original = canvasButton("Original", 34, 20, g), tall = canvasButton("9:16", 16, 28, g);
+        originalCanvas = original;
+        tallCanvas = tall;
         original.setSelected(true);
         g.selectedToggleProperty().addListener((o, a, b) -> {
             if (b == null) { a.setSelected(true); return; }
@@ -538,14 +580,17 @@ final class ClipEditor {
         // Its text switches between "Save trim" and "Save copy"; a fixed width keeps the play controls from sliding.
         saveTrim.setMinWidth(112);
         saveTrim.setPrefWidth(112);
-        Button share = Ui.button("Share clip", Icons.SHARE, this::export, "primary");
+        Button toSoundboard = Ui.button("Add to soundboard", Icons.SOUND, this::addToSoundboard, "outline");
+        toSoundboard.setTooltip(new Tooltip("Turns the trimmed part (with your track volumes) into a soundboard sound"));
+        toSoundboard.setDisable(clip.audioTracks == 0 || ctx.capture.ffmpeg().isEmpty());
+        Button share = Ui.button("Export", Icons.SHARE, this::export, "primary");
         ContextMenu cm = new ContextMenu(
                 EqPanel.item("Open in video player", () -> { try { java.awt.Desktop.getDesktop().open(ctx.library.file(clip).toFile()); } catch (Exception ex) { win.toast(ex.getMessage(), true); } }),
                 EqPanel.item("Show in folder", () -> reveal(ctx.library.file(clip))),
                 EqPanel.item("Reset all edits", this::resetEdits));
         Button more = Ui.iconButton(Icons.MORE, "More", () -> { });
         more.setOnAction(e -> cm.show(more, Side.TOP, 0, 0));
-        HBox right = new HBox(10, saveTrim, share, more);
+        HBox right = new HBox(10, toSoundboard, saveTrim, share, more);
         right.setAlignment(Pos.CENTER_RIGHT);
         BorderPane controls = new BorderPane(transport);
         controls.setRight(right);
@@ -929,6 +974,8 @@ final class ClipEditor {
     }
 
     private void markDirty() {
+        // Edits are remembered in Zyclipa as you make them (the file itself is only changed by Save trim / Export).
+        if (!restoring) saveLater.playFromStart();
         if (saveTrim == null) return;
         saveTrim.setDisable(!edited() || ctx.capture.ffmpeg().isEmpty());
         saveTrim.setText(in > 0.01 || out < dur - 0.01 ? "Save trim" : "Save copy");
@@ -936,6 +983,7 @@ final class ClipEditor {
 
     private void resetEdits() {
         in = 0; out = dur;
+        if (originalCanvas != null) originalCanvas.setSelected(true);
         texts.clear();
         rebuildTexts();
         for (int i = 0; i < trackVol.length; i++) { trackSliders.get(i).setValue(1); setTrackMuted(i, false); }
@@ -972,14 +1020,49 @@ final class ClipEditor {
     }
 
     private void export() {
-        javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
-        fc.setTitle("Share / export clip");
-        fc.setInitialFileName(clip.fileName());
-        java.io.File f = fc.showSaveDialog(root.getScene().getWindow());
-        if (f == null) return;
+        ExportDialog.show(root.getScene().getWindow(), clip, edited(), out - in, kind -> {
+            javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
+            fc.setTitle("Export clip");
+            String base = clip.title.replaceAll("[\\\\/:*?\"<>|]", "_");
+            String suffix = switch (kind) { case DISCORD -> " (Discord)"; case Q75 -> " (75%)"; case Q50 -> " (50%)"; case Q25 -> " (25%)"; default -> ""; };
+            fc.setInitialFileName(base + suffix + "." + kind.ext);
+            fc.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter(kind.ext.toUpperCase() + " file", "*." + kind.ext));
+            java.io.File f = fc.showSaveDialog(root.getScene().getWindow());
+            if (f == null) return;
+            Clip.Edit e = currentEdit();
+            win.toast("Exporting " + kind.title.toLowerCase() + "…", false);
+            CompletableFuture.runAsync(() -> {
+                try {
+                    ctx.library.render(clip, e, kind, f.toPath(), ctx.capture.encoder());
+                    long size = java.nio.file.Files.size(f.toPath());
+                    Ui.fx(() -> win.toast("Exported " + f.getName() + " (" + Ui.bytes(size) + ")", false));
+                    Ui.fx(() -> reveal(f.toPath()));
+                } catch (Exception ex) {
+                    Ui.fx(() -> win.toast("Export failed: " + ex.getMessage(), true));
+                }
+            });
+        });
+    }
+
+    /** The trimmed part with the current track volumes becomes a sound in the "Clips" collection of the soundboard. */
+    private void addToSoundboard() {
+        Clip.Edit e = currentEdit();
+        if (e.out - e.in > 60) { win.toast("Trim it to a minute or less first – soundboard sounds are short.", true); return; }
+        win.toast("Adding to the soundboard…", false);
         CompletableFuture.runAsync(() -> {
-            try { ctx.library.export(clip, f.toPath()); Ui.fx(() -> win.toast("Saved a copy to " + f, false)); }
-            catch (Exception e) { Ui.fx(() -> win.toast("Export failed: " + e.getMessage(), true)); }
+            java.nio.file.Path dir = null;
+            try {
+                dir = java.nio.file.Files.createTempDirectory("zyclipa-sound");
+                String name = clip.title.replaceAll("[\\\\/:*?\"<>|]", "_").strip();
+                java.nio.file.Path wav = dir.resolve((name.isEmpty() ? "Clip sound" : name) + ".wav");
+                ctx.library.renderAudioWav(clip, e, wav);
+                var sound = ctx.soundboard.importFile(wav, "Clips");
+                Ui.fx(() -> win.toast("Added “" + sound.name + "” to the soundboard (Clips).", false));
+            } catch (Exception ex) {
+                Ui.fx(() -> win.toast("Couldn't add it to the soundboard: " + ex.getMessage(), true));
+            } finally {
+                if (dir != null) try (var st = java.nio.file.Files.walk(dir)) { st.sorted(java.util.Comparator.reverseOrder()).forEach(q -> q.toFile().delete()); } catch (Exception ignored) { }
+            }
         });
     }
 

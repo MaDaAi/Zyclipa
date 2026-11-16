@@ -14,6 +14,13 @@ import java.nio.file.Path;
 /** JavaFX lifecycle: builds the context, shows the window, and handles --screenshot / --self-test. */
 public final class ZyclipaApp extends Application {
     private AppContext ctx;
+    private static volatile Stage mainStage;
+
+    /** Brings the window back (e.g. when Zyclipa is started again while it runs in the tray). */
+    public static void showWindow() {
+        Stage s = mainStage;
+        if (s != null) Platform.runLater(() -> { s.show(); s.setIconified(false); s.toFront(); s.requestFocus(); });
+    }
     private RecordingOverlay overlay;
 
     @Override public void start(Stage stage) throws Exception {
@@ -50,6 +57,7 @@ public final class ZyclipaApp extends Application {
     }
 
     private void startApp(Stage stage, Path data, boolean automated) throws Exception {
+        mainStage = stage;
         ctx = new AppContext(data, !automated);
         if (automated && CliOptions.dataDir() == null) {
             ctx.settings.recording.clipsDir = data.resolve("Clips").toString();
@@ -93,9 +101,28 @@ public final class ZyclipaApp extends Application {
             return;
         }
 
-        stage.setOnCloseRequest(e -> Platform.exit());
-        if (CliOptions.minimized()) stage.setIconified(true);
-        stage.show();
+        // Closing the window keeps Zyclipa running in the tray (hotkeys, instant replay, dashboard), unless turned off.
+        boolean tray = io.zyclipa.ui.Tray.install(stage, ctx);
+        if (tray) Platform.setImplicitExit(false);
+        stage.setOnCloseRequest(e -> {
+            if (tray && ctx.settings.general.runInBackground) {
+                e.consume();
+                stage.hide();
+                if (!ctx.settings.general.trayHintShown) {
+                    io.zyclipa.ui.Tray.message("Zyclipa is still running – it's here by the clock. Right-click it to quit.");
+                    ctx.settings.general.trayHintShown = true;
+                    ctx.store.save();
+                }
+            } else {
+                io.zyclipa.ui.Tray.remove();
+                Platform.exit();
+            }
+        });
+        if (CliOptions.minimized() && tray) { /* start hidden in the tray */ }
+        else {
+            if (CliOptions.minimized()) stage.setIconified(true);
+            stage.show();
+        }
         overlay = new RecordingOverlay(ctx, stage);
         if (ctx.settings.recording.replayEnabled && ctx.capture.ffmpeg().isPresent()) ctx.replay.start();
         // Start from the volumes Windows already has, rather than forcing saved ones (avoids a sudden loud jump).
@@ -103,6 +130,7 @@ public final class ZyclipaApp extends Application {
     }
 
     @Override public void stop() {
+        io.zyclipa.ui.Tray.remove();
         if (overlay != null) overlay.close();
         if (ctx != null) ctx.shutdown();
         // FFmpeg children are stopped above; make sure no non-daemon thread keeps the JVM alive.

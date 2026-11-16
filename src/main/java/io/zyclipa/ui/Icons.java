@@ -36,6 +36,8 @@ public final class Icons {
     public static final String SEARCH = "M10.5 4 A6.5 6.5 0 1 0 10.51 4 Z M15.5 15.5 L21 21";
     public static final String GLOBE = "M12 3 A9 9 0 1 0 12.01 3 Z M3 12 H21 M12 3 Q16 7.5 12 21 Q8 7.5 12 3";
     public static final String KEY = "M8 10 A4 4 0 1 0 8.01 10 Z M11.5 12 H21 M18 12 V15.5 M15 12 V14.5";
+    /** Clip it: frame corners with a play mark (same drawing as the dashboards). */
+    public static final String CLIP_IT = "M4 8 V5.5 A1.5 1.5 0 0 1 5.5 4 H8 M16 4 H18.5 A1.5 1.5 0 0 1 20 5.5 V8 M20 16 V18.5 A1.5 1.5 0 0 1 18.5 20 H16 M8 20 H5.5 A1.5 1.5 0 0 1 4 18.5 V16 M10 9 L15 12 L10 15 Z";
     public static final String REFRESH = "M20 12 A8 8 0 1 1 17.5 6.2 M20 3 V8 H15";
 
     public static final String GAMEPAD = "M7 7 H17 Q21 7 21.5 12 L22 16 Q22 19 19.5 19 Q18 19 16.5 16.5 H7.5 Q6 19 4.5 19 Q2 19 2 16 L2.5 12 Q3 7 7 7 Z M7 10 V14 M5 12 H9 M15.5 11 V11.1 M17.5 13 V13.1";
@@ -65,7 +67,7 @@ public final class Icons {
     public static Node of(String path, double size) {
         SVGPath p = new SVGPath();
         p.setContent(path);
-        boolean stroke = path.contains("Q") || !path.trim().endsWith("Z") || path.equals(MIXER) || path.equals(GRID) || path.equals(FILM) || path.equals(MONITOR) || path.equals(SETTINGS);
+        boolean stroke = path.contains("Q") || !path.trim().endsWith("Z") || path.equals(MIXER) || path.equals(GRID) || path.equals(FILM) || path.equals(MONITOR) || path.equals(SETTINGS) || path.equals(CLIP_IT);
         p.getStyleClass().add("icon");
         p.setFillRule(javafx.scene.shape.FillRule.EVEN_ODD);
         if (stroke) p.getStyleClass().add("icon-stroke");

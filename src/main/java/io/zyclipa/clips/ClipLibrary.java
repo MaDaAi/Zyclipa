@@ -308,6 +308,148 @@ public final class ClipLibrary {
         return n;
     }
 
+    // ================================================================ edits kept in the app, and exports
+
+    /** Remembers the editor's changes for this clip (null = none). The video file itself is never changed. */
+    public void saveEdit(Clip c, Clip.Edit e) {
+        c.edit = e;
+        saveIndex();
+    }
+
+    /** What an export makes. */
+    public enum Export {
+        ORIGINAL("Original file", "The file exactly as recorded – no edits applied.", "mp4"),
+        DISCORD("For Discord (under 10 MB)", "Small enough to send on Discord without Nitro. Lower resolution for longer clips.", "mp4"),
+        FULL("Full quality", "Same picture quality as the recording.", "mp4"),
+        Q75("¾ quality", "A bit smaller, still sharp.", "mp4"),
+        Q50("½ quality", "About half the size.", "mp4"),
+        Q25("¼ quality", "Smallest video.", "mp4"),
+        AUDIO("Audio only (MP3)", "Just the sound, with your track volumes.", "mp3");
+        public final String title, description, ext;
+        Export(String title, String description, String ext) { this.title = title; this.description = description; this.ext = ext; }
+        double quality() { return switch (this) { case Q75 -> 0.75; case Q50 -> 0.5; case Q25 -> 0.25; default -> 1; }; }
+    }
+
+    static final long DISCORD_LIMIT = 10L * 1024 * 1024;
+
+    /** Renders the clip with its edit (trim, 9:16, captions, track volumes mixed into one track) to {@code target}. */
+    public void render(Clip c, Clip.Edit e, Export kind, Path target, String encoder) throws IOException, InterruptedException {
+        if (kind == Export.ORIGINAL) { export(c, target); return; }
+        Ffmpeg ff = ffmpeg.get().orElseThrow(() -> new IOException("Exporting needs FFmpeg."));
+        Clip.Edit ed = e != null ? e : Clip.Edit.none(c);
+        double len = Math.max(0.1, ed.out - ed.in);
+        if (kind == Export.AUDIO) {
+            run(ff, audioArgs(c, ed, List.of("-c:a", "libmp3lame", "-b:a", "192k"), target), target, "Export");
+            return;
+        }
+        boolean visual = ed.vertical || (ed.texts != null && !ed.texts.isEmpty());
+        long videoBps;
+        int maxHeight = 0;
+        if (kind == Export.DISCORD) {
+            // 10 MB budget with a safety margin, minus the sound.
+            videoBps = (long) (9.3 * 1024 * 1024 * 8 / len) - 96_000;
+            if (videoBps < 120_000) throw new IOException("This clip is too long to fit in 10 MB – trim it to under about " + Math.round(9.3 * 8 * 1024 * 1024 / 216_000) + " seconds.");
+            maxHeight = videoBps < 600_000 ? 480 : videoBps < 1_500_000 ? 720 : 1080;
+        } else {
+            long total = c.durationSec > 0 ? (long) (c.sizeBytes * 8 / c.durationSec) : 12_000_000;
+            videoBps = (long) (Math.max(1_000_000, total - 160_000L * Math.max(1, c.audioTracks)) * kind.quality());
+        }
+        for (int attempt = 0; attempt < 3; attempt++) {
+            List<String> a = videoArgs(c, ed, kind, videoBps, maxHeight, visual, encoder, target);
+            run(ff, a, target, "Export");
+            if (kind != Export.DISCORD || Files.size(target) <= DISCORD_LIMIT) return;
+            videoBps = (long) (videoBps * 0.8);   // came out too big: try again a bit smaller
+        }
+        throw new IOException("Couldn't get this clip under 10 MB – try trimming it shorter.");
+    }
+
+    /** The edit's sound (trimmed, volumes applied, tracks mixed) as a WAV for the soundboard. */
+    public void renderAudioWav(Clip c, Clip.Edit e, Path target) throws IOException, InterruptedException {
+        Ffmpeg ff = ffmpeg.get().orElseThrow(() -> new IOException("This needs FFmpeg."));
+        Clip.Edit ed = e != null ? e : Clip.Edit.none(c);
+        run(ff, audioArgs(c, ed, List.of("-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2"), target), target, "Making the sound");
+    }
+
+    private static void run(Ffmpeg ff, List<String> a, Path target, String what) throws IOException, InterruptedException {
+        Files.deleteIfExists(target);
+        Ffmpeg.Result r = ff.run(a, 1800);
+        if (!r.ok() || !Files.exists(target)) throw new IOException(what + " failed: " + r.output());
+    }
+
+    /** "[0:a:0]volume=…[a0];…amix…[aout]" for the tracks that are on, or null when there's no sound. */
+    public static String mixFilter(Clip c, Clip.Edit e) {
+        StringBuilder f = new StringBuilder();
+        List<String> outs = new ArrayList<>();
+        for (int i = 0; i < c.audioTracks; i++) {
+            double v = e.volume(i);
+            if (v <= 0.001) continue;
+            f.append("[0:a:").append(i).append("]volume=").append(fmt(v)).append("[a").append(i).append("];");
+            outs.add("[a" + i + "]");
+        }
+        if (outs.isEmpty()) return null;
+        if (outs.size() == 1) f.append(outs.get(0)).append("anull[aout]");
+        else f.append(String.join("", outs)).append("amix=inputs=").append(outs.size()).append(":normalize=0:dropout_transition=0[aout]");
+        return f.toString();
+    }
+
+    private List<String> audioArgs(Clip c, Clip.Edit e, List<String> codec, Path target) throws IOException {
+        String mix = mixFilter(c, e);
+        if (mix == null) throw new IOException("All the sound in this clip is muted.");
+        List<String> a = new ArrayList<>(List.of("-hide_banner", "-loglevel", "error", "-y", "-ss", fmt(e.in), "-to", fmt(e.out), "-i", file(c).toString(),
+                "-filter_complex", mix, "-map", "[aout]", "-vn"));
+        a.addAll(codec);
+        a.add(target.toString());
+        return a;
+    }
+
+    private List<String> videoArgs(Clip c, Clip.Edit e, Export kind, long videoBps, int maxHeight, boolean visual, String encoder, Path target) throws IOException {
+        List<String> a = new ArrayList<>(List.of("-hide_banner", "-loglevel", "error", "-y", "-ss", fmt(e.in), "-to", fmt(e.out), "-i", file(c).toString()));
+        StringBuilder v = new StringBuilder("[0:v]");
+        if (e.vertical) v.append("crop=trunc(ih*9/16/2)*2:ih,");
+        if (e.texts != null && !e.texts.isEmpty()) v.append(textFilters(c, e.texts, e.in));
+        double scale = Math.sqrt(kind.quality());
+        if (maxHeight > 0) v.append("scale=-2:'min(ih,").append(maxHeight).append(")',");
+        else if (scale < 0.999) v.append("scale=trunc(iw*").append(fmt(scale)).append("/2)*2:-2,");
+        v.append("format=yuv420p[v]");
+        String mix = mixFilter(c, e);
+        boolean copyVideo = kind == Export.FULL && !visual;
+        StringBuilder fc = new StringBuilder();
+        if (!copyVideo) fc.append(v);
+        if (mix != null) fc.append(fc.length() > 0 ? ";" : "").append(mix);
+        if (fc.length() > 0) a.addAll(List.of("-filter_complex", fc.toString()));
+        a.addAll(List.of("-map", copyVideo ? "0:v" : "[v]"));
+        if (mix != null) a.addAll(List.of("-map", "[aout]"));
+        if (copyVideo) a.addAll(List.of("-c:v", "copy"));
+        else {
+            String kbps = (videoBps / 1000) + "k";
+            // libx264 keeps sizes predictable for the 10 MB target; the faster hardware encoder is fine otherwise.
+            String enc = kind == Export.DISCORD || encoder == null ? "libx264" : encoder;
+            a.addAll(List.of("-c:v", enc, "-b:v", kbps, "-maxrate", kbps, "-bufsize", (videoBps * 2 / 1000) + "k"));
+            if (enc.equals("libx264")) a.addAll(List.of("-preset", "veryfast"));
+        }
+        if (mix != null) a.addAll(List.of("-c:a", "aac", "-b:a", kind == Export.DISCORD ? "96k" : "160k"));
+        a.addAll(List.of("-movflags", "+faststart", target.toString()));
+        return a;
+    }
+
+    /** drawtext filters for captions (text goes through files so nothing needs escaping). */
+    private String textFilters(Clip c, List<TextOverlay> texts, double startSec) throws IOException {
+        StringBuilder v = new StringBuilder();
+        Path font = Path.of(System.getenv().getOrDefault("WINDIR", "C:\\Windows"), "Fonts", "arialbd.ttf");
+        int n = 0;
+        Files.createDirectories(thumbs);
+        for (TextOverlay t : texts) {
+            Path tf = thumbs.resolve(c.id + "_text" + (n++) + ".txt");
+            Files.writeString(tf, t.text().replace("\r", ""), java.nio.charset.StandardCharsets.UTF_8);
+            String y = switch (t.position()) { case "Top" -> "h*0.06"; case "Middle" -> "(h-text_h)/2"; default -> "h-text_h-h*0.08"; };
+            v.append("drawtext=fontfile='").append(ffPath(font)).append("':textfile='").append(ffPath(tf)).append("':fontsize=h*")
+                    .append(fmt(Math.max(2, Math.min(15, t.size())) / 100.0)).append(":fontcolor=white:borderw=3:bordercolor=black@0.7:x=(w-text_w)/2:y=")
+                    .append(y).append(":enable='between(t,").append(fmt(Math.max(0, t.start() - startSec))).append(",")
+                    .append(fmt(Math.max(0, t.end() - startSec))).append(")',");
+        }
+        return v.toString();
+    }
+
     /** "C:\x\y.txt" -> "C\:/x/y.txt", the form FFmpeg filter options need. */
     static String ffPath(Path p) {
         return p.toAbsolutePath().toString().replace("\\", "/").replace(":", "\\:").replace("'", "");

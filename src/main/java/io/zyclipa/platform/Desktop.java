@@ -10,6 +10,11 @@ public interface Desktop {
 
     record Window(String title, String process) { }
 
+    /** The app in front: its window title, program name and full path, and whether its window fills the monitor. */
+    record Foreground(String title, String process, String path, boolean fillsScreen) { }
+
+    default Foreground foreground() { Window w = foregroundWindow(); return new Foreground(w.title(), w.process(), "", false); }
+
     List<Display> displays();
 
     /** Visible top-level windows with a title, for window capture. */

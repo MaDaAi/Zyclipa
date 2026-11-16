@@ -655,7 +655,7 @@ public final class MixerView implements View {
         levels.setPrefWidth(260);
         levels.setAlignment(Pos.CENTER);
         Button setup = Ui.button("Set up", Icons.SETTINGS, this::micSetup, "outline");
-        Button resetAll = Ui.button("Reset to defaults", Icons.REPLAY, this::resetMic, "boxed");
+        Button resetAll = Ui.button("Reset to defaults", null, this::resetMic, "boxed");
         resetAll.setTooltip(new javafx.scene.control.Tooltip("Puts mic boost, the equalizer, noise cancellation, gate, compressor and limiter back to how they started. Your devices are kept."));
         VBox buttons = new VBox(6, setup, resetAll);
         setup.setMaxWidth(Double.MAX_VALUE);

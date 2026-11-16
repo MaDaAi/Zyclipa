@@ -75,7 +75,7 @@ final class DriveSyncBox {
             case SyncService.FAILED -> {
                 text = "Upload failed: " + (item == null ? "" : item.error);
                 style = "danger-text";
-                buttons.getChildren().add(Ui.button("Retry", Icons.REPLAY, () -> { ctx.sync.retry(clip.id); refresh(); }, "primary"));
+                buttons.getChildren().add(Ui.button("Retry", null, () -> { ctx.sync.retry(clip.id); refresh(); }, "primary"));
                 buttons.getChildren().add(Ui.button("Remove from queue", null, this::cancel, "outline"));
             }
             case SyncService.UNAVAILABLE -> {

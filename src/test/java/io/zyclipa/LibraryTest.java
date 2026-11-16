@@ -73,6 +73,63 @@ class LibraryTest {
         assertThrows(IOException.class, () -> l.trim(c, 4, 1));
     }
 
+    @Test void exportsApplyTheSavedEdit() throws Exception {
+        Optional<Ffmpeg> ff = Ffmpeg.locate("");
+        assumeTrue(ff.isPresent(), "FFmpeg not available");
+        Path clips = tmp.resolve("clips3");
+        Files.createDirectories(clips);
+        Path src = clips.resolve("game.mp4");
+        Ffmpeg.Result r = ff.get().run(List.of("-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=1280x720:rate=30",
+                "-f", "lavfi", "-i", "sine=frequency=440", "-f", "lavfi", "-i", "sine=frequency=880", "-t", "8",
+                "-map", "0:v", "-map", "1:a", "-map", "2:a", "-c:v", "libx264", "-b:v", "6000k", "-g", "30", "-c:a", "aac", src.toString()), 120);
+        assertTrue(r.ok(), r.output());
+        ClipLibrary l = lib(clips, ff);
+        Clip c = l.add(src, "replay", "Test");
+        Clip.Edit e = Clip.Edit.none(c);
+        e.in = 2;
+        e.out = 6;
+        e.volumes = new double[]{1.5, 1};
+        e.muted = new boolean[]{false, true};
+        l.saveEdit(c, e);
+        // The edit is remembered in the index without touching the file.
+        ClipLibrary again = lib(clips, ff);
+        again.scan();
+        Clip back = again.all().stream().filter(x -> x.id.equals(c.id)).findFirst().orElseThrow();
+        assertNotNull(back.edit);
+        assertEquals(2, back.edit.in, 1e-9);
+        assertTrue(back.edit.muted[1]);
+        assertEquals(0, back.edit.volume(1), "muted track exports silent");
+
+        Path discord = tmp.resolve("out/discord.mp4");
+        Files.createDirectories(discord.getParent());
+        l.render(c, e, ClipLibrary.Export.DISCORD, discord, "libx264");
+        assertTrue(Files.size(discord) <= 10L * 1024 * 1024, "under 10 MB");
+        Clip d = l.add(discord, "imported", "Test");
+        assertEquals(4, d.durationSec, 0.5, "only the trimmed part");
+        assertEquals(1, d.audioTracks, "tracks mixed into one");
+
+        Path half = tmp.resolve("out/half.mp4");
+        l.render(c, e, ClipLibrary.Export.Q50, half, "libx264");
+        Clip h = l.add(half, "imported", "Test");
+        assertTrue(h.width < 1280 && h.width >= 800, "½ quality is smaller: " + h.width);
+
+        Path mp3 = tmp.resolve("out/sound.mp3");
+        l.render(c, e, ClipLibrary.Export.AUDIO, mp3, null);
+        assertTrue(Files.size(mp3) > 40_000, "about 4 s of 192k MP3");
+
+        Path wav = tmp.resolve("out/sound.wav");
+        l.renderAudioWav(c, e, wav);
+        long expected = 4L * 48_000 * 4;   // 4 s, stereo 16-bit
+        assertEquals(expected, Files.size(wav), expected * 0.1, "4 s WAV for the soundboard");
+        assertNull(ClipLibrary.mixFilter(c, mutedAll(c)), "nothing to export when everything is muted");
+    }
+
+    static Clip.Edit mutedAll(Clip c) {
+        Clip.Edit e = Clip.Edit.none(c);
+        e.muted = new boolean[]{true, true};
+        return e;
+    }
+
     @Test void editorExportCropsAndDropsTracks() throws Exception {
         Optional<Ffmpeg> ff = Ffmpeg.locate("");
         assumeTrue(ff.isPresent(), "FFmpeg not available");

@@ -29,6 +29,31 @@ public final class Clip {
     public String driveFileId = "";
     public long driveSyncedSize;
 
+    /** The editor's changes, kept in Zyclipa only (the file isn't touched); null when there are none. */
+    public Edit edit;
+
+    /** Trim, 9:16, captions and per-track volume/mute – remembered per clip like SteelSeries' saved edits. */
+    public static final class Edit {
+        public double in, out;
+        public boolean vertical;
+        public double[] volumes = new double[0];
+        public boolean[] muted = new boolean[0];
+        public List<ClipLibrary.TextOverlay> texts = new ArrayList<>();
+
+        /** Volume used for track {@code i} in exports (0 when muted). */
+        public double volume(int i) {
+            if (i < muted.length && muted[i]) return 0;
+            return i < volumes.length ? Math.max(0, Math.min(2, volumes[i])) : 1;
+        }
+
+        /** The whole clip, nothing changed. */
+        public static Edit none(Clip c) {
+            Edit e = new Edit();
+            e.out = Math.max(0.1, c.durationSec);
+            return e;
+        }
+    }
+
     public boolean isVideo() { return !"screenshot".equals(kind); }
 
     public String folder() {

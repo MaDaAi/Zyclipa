@@ -188,7 +188,7 @@ final class ChannelTab {
         VBox test = new VBox(6, Ui.label("TEST", "tiny-caps"), tests);
         test.getStyleClass().add("preset-card");
 
-        Button reset = Ui.button("Reset to defaults", Icons.REPLAY, this::resetDefaults, "boxed");
+        Button reset = Ui.button("Reset to defaults", null, this::resetDefaults, "boxed");
         reset.setTooltip(new javafx.scene.control.Tooltip("Turns every effect on this page back to how it started. Your saved presets and sound routing are kept."));
         reset.setStyle("-fx-font-size: 11px; -fx-padding: 4 8;");
         test.getChildren().add(reset);

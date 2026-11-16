@@ -139,7 +139,7 @@ public final class ClipsView implements View {
         fps.setOnAction(e -> { r.fps = Integer.parseInt(fps.getValue().replace("fps", "")); ctx.store.save(); });
         HBox cellQuality = cell(len, sep(), quality, sep(), res, sep(), fps);
 
-        saveReplay = Ui.button(null, Icons.REPLAY, () -> ctx.clipNow(), "primary");
+        saveReplay = Ui.button("Clip it", Icons.CLIP_IT, () -> ctx.clipNow(), "primary");
         saveReplay.setAccessibleText("Save the last moments as a clip");
         saveReplay.setTooltip(new javafx.scene.control.Tooltip("Save the last moments as a clip (or press the keys shown)"));
         HBox cellReplay = cell(replayLabel, replaySwitch, sep(), replayKeys, saveReplay);
@@ -167,7 +167,7 @@ public final class ClipsView implements View {
         searchBox.setPadding(new Insets(0, 0, 0, 10));
         search.setStyle("-fx-border-color: transparent; -fx-background-color: transparent;");
         HBox head = Ui.row(12, count, importBtn, Ui.grow(), searchBox, filter, sort,
-                Ui.iconButton(Icons.REFRESH, "Look for new files in the clips folder", () -> ctx.library.scanAsync(), "boxed"));
+                rescanButton());
 
         galleryPage = new VBox(14, head, storage, gallery);
         galleryPage.getStyleClass().add("page");
@@ -367,7 +367,7 @@ public final class ClipsView implements View {
         Label game = Ui.label(c.source.toUpperCase(Locale.ROOT), "clip-game");
         Label title = Ui.label(c.title, "clip-title");
         title.setWrapText(false);
-        Label age = new Label(Ui.ago(c.createdAt), Icons.of(Icons.REPLAY, 11));
+        Label age = new Label(Ui.ago(c.createdAt));
         age.getStyleClass().add("clip-age");
         VBox text = new VBox(3, game, title, age);
         HBox.setHgrow(text, Priority.ALWAYS);
@@ -542,5 +542,11 @@ public final class ClipsView implements View {
 
     static void style(javafx.scene.control.DialogPane p) {
         p.getStylesheets().add(ClipsView.class.getResource("/ui/zyclipa.css").toExternalForm());
+    }
+
+    private Button rescanButton() {
+        Button b = Ui.button("Rescan", null, () -> ctx.library.scanAsync(), "boxed");
+        b.setTooltip(new javafx.scene.control.Tooltip("Look for new files in the clips folder"));
+        return b;
     }
 }

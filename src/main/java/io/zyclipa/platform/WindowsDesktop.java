@@ -72,6 +72,41 @@ public final class WindowsDesktop implements Desktop {
         return new Window(Native.toString(buf).trim(), processOf(h));
     }
 
+    @Override public Foreground foreground() {
+        WinDef.HWND h = U.GetForegroundWindow();
+        if (h == null) return new Foreground("", "", "", false);
+        int len = U.GetWindowTextLength(h);
+        char[] buf = new char[Math.max(1, len + 1)];
+        U.GetWindowText(h, buf, buf.length);
+        IntByReference pid = new IntByReference();
+        U.GetWindowThreadProcessId(h, pid);
+        String path = processPath(pid.getValue());
+        String name = path.substring(path.lastIndexOf('\\') + 1);
+        if (name.toLowerCase(Locale.ROOT).endsWith(".exe")) name = name.substring(0, name.length() - 4);
+        boolean fills = false;
+        WinDef.RECT r = new WinDef.RECT();
+        WinUser.HMONITOR mon = U.MonitorFromWindow(h, WinUser.MONITOR_DEFAULTTONEAREST);
+        WinUser.MONITORINFO mi = new WinUser.MONITORINFO();
+        if (U.GetWindowRect(h, r) && mon != null && U.GetMonitorInfo(mon, mi).booleanValue()) {
+            WinDef.RECT m = mi.rcMonitor;
+            fills = r.left <= m.left && r.top <= m.top && r.right >= m.right && r.bottom >= m.bottom;
+        }
+        return new Foreground(Native.toString(buf).trim(), name, path, fills);
+    }
+
+    static String processPath(int pid) {
+        if (pid <= 0) return "";
+        WinNT.HANDLE h = Kernel32.INSTANCE.OpenProcess(0x1000 /* QUERY_LIMITED_INFORMATION */, false, pid);
+        if (h == null) return "";
+        try {
+            char[] buf = new char[1024];
+            IntByReference size = new IntByReference(buf.length);
+            return Kernel32.INSTANCE.QueryFullProcessImageName(h, 0, buf, size) ? new String(buf, 0, size.getValue()) : "";
+        } finally {
+            Kernel32.INSTANCE.CloseHandle(h);
+        }
+    }
+
     static String processOf(WinDef.HWND hwnd) {
         IntByReference pid = new IntByReference();
         U.GetWindowThreadProcessId(hwnd, pid);

@@ -14,6 +14,28 @@ public final class GameNames {
             "code", "notepad", "notepad++", "obs64", "steam", "steamwebhelper", "epicgameslauncher", "battle.net", "outlook",
             "winword", "excel", "powerpnt", "vlc", "java", "javaw", "zyclipa", "craft-anything");
 
+    /** Games people often play outside the usual game folders. */
+    private static final Set<String> KNOWN_GAMES = Set.of("robloxplayerbeta", "valorant-win64-shipping", "fortniteclient-win64-shipping", "cs2", "csgo",
+            "league of legends", "r5apex", "r5apex_dx12", "overwatch", "rocketleague", "minecraft.windows", "gta5", "gta5_enhanced",
+            "rdr2", "eldenring", "destiny2", "dota2", "rainbowsix", "rainbowsix_vulkan", "tslgame", "marvel-win64-shipping", "cod", "bf2042",
+            "deadbydaylight-win64-shipping", "helldivers2", "fc25", "fc26", "eafc25", "eafc26", "warframe.x64", "pathofexile", "pathofexile_x64");
+    /** Folders games are installed in (lower case). */
+    private static final String[] GAME_DIRS = {"\\steamapps\\common\\", "\\epic games\\", "\\riot games\\", "\\xboxgames\\",
+            "\\gog galaxy\\games\\", "\\ubisoft game launcher\\games\\", "\\ea games\\", "\\rockstar games\\", "\\roblox\\versions\\"};
+
+    /**
+     * Stricter than {@link #gameOf}: is the app in front really a game? Known games, anything in a game library folder,
+     * or a full-screen app that isn't an everyday program.
+     */
+    public static boolean isLikelyGame(io.zyclipa.platform.Desktop.Foreground f) {
+        String p = f.process() == null ? "" : f.process().toLowerCase(Locale.ROOT);
+        if (p.isBlank() || NOT_GAMES.contains(p) || isSelf(p)) return false;
+        if (KNOWN_GAMES.contains(p)) return true;
+        String path = f.path() == null ? "" : f.path().toLowerCase(Locale.ROOT);
+        for (String d : GAME_DIRS) if (path.contains(d)) return true;
+        return f.fillsScreen() && !path.contains("\\windows\\") && !path.contains("\\windowsapps\\");
+    }
+
     public static boolean isSelf(String process) {
         String p = process == null ? "" : process.toLowerCase(Locale.ROOT);
         return p.equals("java") || p.equals("javaw") || p.equals("zyclipa");
