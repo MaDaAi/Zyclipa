@@ -19,9 +19,9 @@ class VersionSyncTest {
     }
 
     @Test void oneVersionEverywhere() throws Exception {
-        String pom = find(Path.of("pom.xml"), "<artifactId>zyclipa</artifactId>\s*<version>([^<]+)</version>");
+        String pom = find(Path.of("pom.xml"), "<artifactId>zyclipa</artifactId>\\s*<version>([^<]+)</version>");
         assertEquals(pom, AppContext.VERSION, "AppContext.VERSION");
-        assertEquals(pom, find(Path.of("packaging/build-installer.ps1"), "\$Version = '([^']+)'"), "Windows packaging default");
+        assertEquals(pom, find(Path.of("packaging/build-installer.ps1"), "\\$Version = '([^']+)'"), "Windows packaging default");
         assertEquals(pom, find(Path.of("packaging/linux/io.github.MaDaAi.Zyclipa.metainfo.xml"), "<release version=\"([^\"]+)\""), "Linux metainfo (newest release first)");
     }
 }
