@@ -10,7 +10,6 @@
   - *Entry points:* the PC dashboard (HTTPS; loopback by default, home network or internet only when the owner turns them on), the WebRTC data channel, Google Drive files, and the website.
   - *Attackers:* someone on the same network; an internet attacker if outside access is on; a malicious website trying CSRF or CORS tricks; someone who obtains a stolen Google session; a supply-chain compromise.
 - **Highest open risks:**
-  - The exe bundles an end-of-life Java runtime (24.0.1).
   - The website can't send some security headers on GitHub Pages.
   - MFA on the owner's accounts is unverified.
   - The code is largely AI-assisted, with no independent human security review on record.
@@ -19,18 +18,18 @@
 
 | Measure | Count |
 |---|---:|
-| **FAIL (confirmed not passed)** | **2** |
+| **FAIL (confirmed not passed)** | **1** |
 | **UNKNOWN (not verified)** | **2** |
-| **FAIL + UNKNOWN (not passed or unverified)** | **4** |
-| PASS (verified) | 49 |
+| **FAIL + UNKNOWN (not passed or unverified)** | **3** |
+| PASS (verified) | 50 |
 | NOT APPLICABLE (justified) | 17 |
 | **TOTAL** | **70** |
 
-**FAILED: 2 / 70.**
+**FAILED: 1 / 70.**
 
-Equations: 49 + 2 + 2 + 17 = 70; FAIL + UNKNOWN = 4.
+Equations: 50 + 1 + 2 + 17 = 70; FAIL + UNKNOWN = 3.
 
-Applicable-check pass rate: 49 / 53 = 92 %.
+Applicable-check pass rate: 50 / 53 = 94 %.
 
 UNKNOWN means not verified, not proven vulnerable. Verified by `scripts/count_checks.py security-checks.csv`.
 
@@ -57,7 +56,7 @@ See the table at the end of this file (generated from `security-checks.csv`).
 | Software licences | PASS | `THIRD-PARTY-NOTICES.txt` (OpenJFX GPLv2+CE, Apache-2.0, BSD WebRTC + patents, Bouncy Castle, NVIDIA header) and `LICENSE.txt` ship next to the exe and on both sites. FFmpeg isn't bundled. |
 | Trademark ("Zyclipra") | UNKNOWN | No trademark search was done. Search CIPO and USPTO before promoting the name. |
 | Google OAuth policy | UNKNOWN | The app is in Testing mode (test users only). A public launch needs Google verification, which needs the privacy and terms links (now present). |
-| Desktop platform | PARTIAL | Credential Manager for secrets, no admin rights, no drivers, local server loopback by default.<br>Open: the exe isn't code-signed (SmartScreen warnings, no tamper evidence), there's no auto-update channel, and the bundled runtime is end of life (check 37). |
+| Desktop platform | PARTIAL | Credential Manager for secrets, no admin rights, no drivers, local server loopback by default.<br>The exe now bundles Temurin 21.0.13 LTS.<br>Open: the exe isn't code-signed (SmartScreen warnings, no tamper evidence), and there's no auto-update channel. |
 
 ## Changes in this audit
 
@@ -66,6 +65,7 @@ See the table at the end of this file (generated from `security-checks.csv`).
 | `remote/DashboardAuth.java` | Logs password and website sign-ins, failed attempts and lock-outs (address and session hash only). Raises one alert per lock-out. |
 | `app/AppContext.java` | Shows lock-out alerts in the app. |
 | `remote/RtcBridge.java` | At most 64 in-flight requests per WebRTC connection; extra messages are dropped. |
+| `packaging/build-installer.ps1`, `.tools/jdk-21.0.13+9` (not in git) | The exe is built with Temurin 21.0.13; description no longer says "open-source". |
 | `.github/workflows/build.yml`, website `pages.yml` | Every action pinned to a full commit SHA. |
 | `privacy.html` (website and PC dashboard) | Mentions the local sign-in log. |
 | `AuthAlertTest.java` (new) | Lock-out alert fires once; a wrong website key counts toward the lock-out; other devices aren't affected. |
@@ -74,13 +74,15 @@ See the table at the end of this file (generated from `security-checks.csv`).
 Rollback: each change is self-contained and can be reverted on its own; behaviour for normal use is unchanged.
 
 **Original issues fixed and recorded:**
+- **37:** the exe bundled end-of-life Java 24.0.1; now Temurin 21.0.13 LTS.
 - **42:** sign-ins weren't logged.
 - **43:** the owner wasn't alerted on lock-outs.
 - **62:** CI actions were unpinned.
 - **64/70:** WebRTC requests per connection weren't bounded.
 
 ## Tests actually run
-- `mvnw -o package`: **69 tests, 0 failures, 9 skipped** (hardware tests).
+- `mvnw -o package`: **69 tests, 0 failures, 9 skipped** (hardware tests), on JDK 24 and again on Temurin 21.0.13.
+- New exe on its bundled 21.0.13 runtime: it starts and renders, 15/15 dashboard security checks pass, and a WebRTC data channel works with Chromium.
 - Live security test against the running app (`webtest.py`, synthetic key): **15/15 passed**.
   - Covers CORS preflight from the website and from another origin, wrong key, right key, the route allowlist, a missing token, a token without the origin, duplicate command ids, logout, and the token after logout.
 - Live checks:
@@ -95,7 +97,7 @@ Rollback: each change is self-contained and can be reverted on its own; behaviou
   - Screen-reader testing.
 
 ## Owner actions needed
-1. **Bundled runtime (check 37).** Approve downloading a current JDK (for example Eclipse Temurin 21.0.x latest or 25.0.x LTS). I'll then rebuild the exe with it.
+1. **Bundled runtime (check 37) – done.** The exe was rebuilt with Eclipse Temurin 21.0.13 LTS, downloaded with your approval and SHA-256 verified. Update it each quarter.
 2. **MFA (check 55).** Turn on 2-step verification for your GitHub and Google accounts.
 3. **Human review (check 50).** Have someone review the auth and remote-control code before a public launch.
 4. **Legal review.** Have a lawyer review the privacy policy, terms and EULA. Run a trademark search for "Zyclipra".
@@ -107,7 +109,6 @@ Rollback: each change is self-contained and can be reverted on its own; behaviou
 **CONDITIONALLY READY** for personal use and invited testers.
 
 **NOT READY** for a public launch until:
-- the bundled Java runtime is updated (check 37);
 - MFA is confirmed (check 55);
 - a human security review is done (check 50);
 - Google OAuth verification is complete;
@@ -155,7 +156,7 @@ No audit can guarantee immunity from attacks or legal claims.
 | 34 | APIs trusting user-controlled roles or IDs | PASS |  | Caller identity comes from the server-side session; no role/owner fields are accepted. |  | route review |
 | 35 | Sensitive data in logs | PASS |  | Logs hold no tokens, passwords or emails; sign-in logs record time, address and a session hash only. |  | grep of log statements |
 | 36 | Sensitive source maps or build artifacts | PASS |  | No source maps; the website deploys an explicit file list; the jar contains no private data beyond the OAuth client (see 03). |  | tsconfig, workflow and jar listing |
-| 37 | Vulnerable or abandoned dependencies | FAIL | MEDIUM | The exe bundles Java runtime 24.0.1, which no longer gets security updates (Java 24 is end of life). Libraries were upgraded (BouncyCastle 1.86, JNA 5.19.1, Gson 2.15.0); JavaFX 23.0.2 kept. | Rebuild the exe with a current LTS JDK (21.0.x latest or 25.0.x) – needs a JDK download (owner approval). | runtime/release file: JAVA_VERSION="24.0.1" |
+| 37 | Vulnerable or abandoned dependencies | PASS |  | Fixed: the exe now bundles Eclipse Temurin 21.0.13 LTS (Oct 2026 security update, SHA-256 verified) instead of end-of-life Java 24.0.1. Libraries upgraded (BouncyCastle 1.86, JNA 5.19.1, Gson 2.15.0); JavaFX 23.0.2 kept (no known applicable issue). | Keep the JDK on the latest 21.0.x update each quarter and rebuild. | 69 tests on 21.0.13; new exe ran, 15/15 dashboard security checks, WebRTC interop OK; runtime/release = 21.0.13 |
 | 38 | Malicious or compromised packages | PASS | LOW | All from Maven Central, exact versions, established publishers, releases at least 2 weeks old; webrtc-java ships a native DLL from a single maintainer. | Consider verifying artifact signatures (PGP) in CI. | pom review; Maven checksum validation |
 | 39 | Prompt injection | NOT APPLICABLE |  | Zyclipra has no AI/LLM features, prompts, retrieval or agents. |  |  |
 | 40 | AI tools bypassing user permissions | NOT APPLICABLE |  | Zyclipra has no AI/LLM features, prompts, retrieval or agents. |  |  |

@@ -22,7 +22,7 @@ $jpArgs = @(
     '--name', 'Zyclipra',
     '--app-version', $Version,
     '--vendor', 'Zyclipra contributors',
-    '--description', 'Free, open-source gaming utility: recording, instant replay, mixer and soundboard',
+    '--description', 'Free gaming utility: recording, instant replay, mixer and soundboard',
     '--input', $inDir,
     '--main-jar', 'zyclipra.jar',
     '--main-class', 'io.zyclipra.Launcher',
