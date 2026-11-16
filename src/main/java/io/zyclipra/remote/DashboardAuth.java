@@ -39,6 +39,12 @@ public final class DashboardAuth {
         Session(String id, long created, String address, String agent) { this.id = id; this.created = created; this.lastSeen = created; this.address = address; this.agent = agent; }
     }
 
+    private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(DashboardAuth.class.getName());
+    private volatile java.util.function.Consumer<String> alert = m -> { };
+
+    /** Called when sign-ins get locked out (someone may be guessing the password): the app shows it. */
+    public void onAlert(java.util.function.Consumer<String> a) { alert = a == null ? m -> { } : a; }
+
     private final Settings.Remote cfg;
     private final Runnable save;
     private final LongSupplier clock;
@@ -137,10 +143,20 @@ public final class DashboardAuth {
     private void fail(String address, long now) {
         int[] f = failures.computeIfAbsent(address, k -> new int[1]);
         f[0]++;
-        if (f[0] >= 5) lockedUntil.put(address, now + Math.min(3600_000L, 30_000L << Math.min(7, f[0] - 5)));
+        LOG.info("dashboard: failed sign-in from " + address + " (" + f[0] + " in a row)");
+        if (f[0] >= 5) {
+            lockedUntil.put(address, now + Math.min(3600_000L, 30_000L << Math.min(7, f[0] - 5)));
+            LOG.warning("dashboard: sign-in locked for " + address + " after " + f[0] + " failed attempts");
+            if (f[0] == 5) alert.accept("Dashboard: " + address + " entered a wrong password 5 times and is locked out for now. "
+                    + "If that wasn't you, change your dashboard password (Settings › Hosting).");
+        }
         recentFailures.add(now);
         recentFailures.removeIf(t -> t < now - 600_000L);
-        if (recentFailures.size() >= 50) globalLockUntil = now + 300_000L;
+        if (recentFailures.size() >= 50 && now >= globalLockUntil) {
+            globalLockUntil = now + 300_000L;
+            LOG.warning("dashboard: all sign-ins paused for 5 minutes after 50 failures in 10 minutes");
+            alert.accept("Dashboard: many wrong passwords from different places – all sign-ins are paused for 5 minutes.");
+        }
         last = Result.WRONG;
     }
 
@@ -151,6 +167,7 @@ public final class DashboardAuth {
         String agentShort = agent == null ? "" : agent.replaceAll("[^\\x20-\\x7E]", "");
         agentShort = agentShort.substring(0, Math.min(120, agentShort.length()));
         Session s = new Session(idOf(token), now, address, agentShort);
+        LOG.info("dashboard: " + (web ? "website" : "password") + " sign-in from " + address + " (session " + s.id + ")");
         s.web = web;
         sessions.put(token, s);
         last = Result.OK;

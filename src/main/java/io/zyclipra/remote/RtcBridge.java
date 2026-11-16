@@ -105,16 +105,21 @@ public final class RtcBridge {
         f.get(5, TimeUnit.SECONDS);
     }
 
+    private static final int MAX_IN_FLIGHT = 64;
+
     private void attach(String peer, RTCDataChannel dc) {
+        java.util.concurrent.atomic.AtomicInteger inFlight = new java.util.concurrent.atomic.AtomicInteger();
         dc.registerObserver(new RTCDataChannelObserver() {
             @Override public void onBufferedAmountChange(long previous) { }
             @Override public void onStateChange() { LOG.info("website link " + peer + ": channel " + dc.getState()); }
             @Override public void onMessage(RTCDataChannelBuffer buffer) {
+                // Bounded work per connection: a misbehaving page can't queue unlimited requests.
+                if (inFlight.incrementAndGet() > MAX_IN_FLIGHT) { inFlight.decrementAndGet(); return; }
                 ByteBuffer b = buffer.data;
                 byte[] bytes = new byte[Math.min(b.remaining(), 64 * 1024)];
                 b.get(bytes);
                 String text = new String(bytes, StandardCharsets.UTF_8);
-                work.execute(() -> reply(peer, dc, text));     // never block WebRTC's own thread
+                work.execute(() -> { try { reply(peer, dc, text); } finally { inFlight.decrementAndGet(); } });   // never block WebRTC's own thread
             }
         });
     }

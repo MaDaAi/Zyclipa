@@ -90,6 +90,7 @@ public final class AppContext implements RemoteControl {
         if (sync.connected() && (sync.auth().avatar() == null || !java.nio.file.Files.exists(sync.auth().avatar())))
             java.util.concurrent.CompletableFuture.runAsync(() -> { sync.auth().loadProfile(); store.save(); });
         dashboardAuth = new DashboardAuth(settings.remote, store::saveNow);
+        dashboardAuth.onAlert(m -> bus.emit(EventBus.ERROR, m));
         dashboard = new DashboardServer(settings.remote, dashboardAuth, this, paths.keystore(),
                 new SecretStore(paths.root().resolve("dashboard-tls.key")));
         website = new io.zyclipra.remote.WebsiteLink(settings.remote, store::saveNow,
