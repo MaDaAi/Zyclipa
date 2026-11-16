@@ -1,7 +1,7 @@
 # Builds a signed Zyclipa release for the in-app updater.
 #   1. ./mvnw.cmd package (with the JDK the exe should ship, e.g. .tools\jdk-21.0.13+9)
 #   2. powershell -File packaging\make-release.ps1 -Version 0.2.0 -Notes "What's new"
-#   3. On GitHub: MaDaAi/zyclipa-dashboard › Releases › new release, tag v<Version>, upload only Zyclipa-<Version>-windows-x64.zip
+#   3. On GitHub: MaDaAi/Zyclipa › Releases › new release, tag v<Version>, upload only Zyclipa-<Version>-windows-x64.zip
 #   4. After the release is published, copy target\release\zyclipa-update.json into the website repo and push it,
 #      so apps are never told about an update whose zip isn't downloadable yet.
 # The signing key is private\update-signing-key.txt (never commit or share it; back it up – without it you can't ship updates).

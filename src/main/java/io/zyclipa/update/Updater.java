@@ -29,7 +29,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /**
- * In-app updates: the signed manifest is on the website, the zip in the public GitHub releases of MaDaAi/zyclipa-dashboard.
+ * In-app updates: the signed manifest is on the website, the zip in the public GitHub releases of MaDaAi/Zyclipa.
  * <ol>
  *   <li>check: reads zyclipa-update.json from the latest release; it must be signed with Zyclipa's release key
  *       (Ed25519, public key below), point at that repository's release downloads and be newer than this version;</li>
@@ -41,7 +41,7 @@ import java.util.zip.ZipInputStream;
  */
 public final class Updater {
     private static final Logger LOG = Logger.getLogger(Updater.class.getName());
-    public static final String REPO = "MaDaAi/zyclipa-dashboard";
+    public static final String REPO = "MaDaAi/Zyclipa";
     /** The signed "latest version" file lives on the website, so a release only needs the zip (one download for people). */
     static final String MANIFEST_URL = "https://madaai.github.io/zyclipa-dashboard/zyclipa-update.json";
     static final String DOWNLOAD_PREFIX = "https://github.com/" + REPO + "/releases/download/";

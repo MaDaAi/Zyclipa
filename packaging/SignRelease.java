@@ -22,7 +22,7 @@ import java.util.HexFormat;
  */
 public class SignRelease {
     static final Path KEY = Path.of("private", "update-signing-key.txt");
-    static final String BASE = "https://github.com/MaDaAi/zyclipa-dashboard/releases/download/";
+    static final String BASE = "https://github.com/MaDaAi/Zyclipa/releases/download/";
 
     public static void main(String[] a) throws Exception {
         if (a.length >= 1 && a[0].equals("genkey")) {
