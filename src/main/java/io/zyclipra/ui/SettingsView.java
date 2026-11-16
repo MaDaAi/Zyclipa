@@ -789,12 +789,70 @@ public final class SettingsView implements View {
         Button data = Ui.button("Open settings folder", Icons.FOLDER, () -> {
             try { java.awt.Desktop.getDesktop().open(ctx.paths.root().toFile()); } catch (Exception e) { win.toast(e.getMessage(), true); }
         }, "outline");
+        // --- updates (signed releases from GitHub; nothing installs without this button)
+        Label upState = Ui.label(ctx.availableUpdate != null ? "Zyclipra " + ctx.availableUpdate.version() + " is available."
+                : "This is Zyclipra " + AppContext.VERSION + ".", "small", "muted");
+        Button install = Ui.button("Download and install", null, () -> { }, "primary");
+        Button checkNow = Ui.button("Check now", null, () -> { }, "outline");
+        install.setVisible(ctx.availableUpdate != null);
+        install.setManaged(ctx.availableUpdate != null);
+        checkNow.setOnAction(e -> {
+            checkNow.setDisable(true);
+            upState.setText("Checking GitHub…");
+            new Thread(() -> {
+                String msg;
+                try { msg = ctx.checkForUpdate().map(r -> "Zyclipra " + r.version() + " is available." + (r.notes().isBlank() ? "" : " " + r.notes()))
+                        .orElse("You have the latest version (" + AppContext.VERSION + ")."); }
+                catch (Exception ex) { msg = "Couldn't check for updates: " + ex.getMessage(); }
+                String m = msg;
+                javafx.application.Platform.runLater(() -> {
+                    upState.setText(m);
+                    install.setVisible(ctx.availableUpdate != null);
+                    install.setManaged(ctx.availableUpdate != null);
+                    checkNow.setDisable(false);
+                });
+            }, "update-check").start();
+        });
+        install.setOnAction(e -> {
+            var rel = ctx.availableUpdate;
+            var folder = io.zyclipra.update.Updater.installedFolder();
+            if (rel == null) return;
+            if (folder.isEmpty()) {
+                DriveSyncBox.browse("https://github.com/" + io.zyclipra.update.Updater.REPO + "/releases/latest");
+                upState.setText("This copy isn't an installed Zyclipra.exe, so the download page was opened instead.");
+                return;
+            }
+            install.setDisable(true);
+            checkNow.setDisable(true);
+            new Thread(() -> {
+                try {
+                    var zip = ctx.updater.download(rel, p -> javafx.application.Platform.runLater(
+                            () -> upState.setText("Downloading Zyclipra " + rel.version() + "… " + Math.round(p * 100) + " %")));
+                    javafx.application.Platform.runLater(() -> upState.setText("Verified. Installing – Zyclipra will restart…"));
+                    ctx.updater.install(zip, folder.get());
+                    Thread.sleep(800);
+                    javafx.application.Platform.runLater(javafx.application.Platform::exit);
+                } catch (Exception ex) {
+                    javafx.application.Platform.runLater(() -> {
+                        upState.setText("Update failed: " + ex.getMessage());
+                        install.setDisable(false);
+                        checkNow.setDisable(false);
+                    });
+                }
+            }, "update-install").start();
+        });
+        ToggleButton autoCheck = sw(ctx.settings.general.checkUpdates, "Check for updates automatically", v -> ctx.settings.general.checkUpdates = v);
+
         String site = "https://madaai.github.io/zyclipra-dashboard/";
         java.util.function.Function<String[], Button> link = a -> Ui.button(a[0], null, () -> DriveSyncBox.browse(site + a[1]), "outline");
         return pageBox("About and Privacy", "Zyclipra " + AppContext.VERSION + " – free software (MIT licence), made in Ontario, Canada.",
                 Ui.settingRow("No Zyclipra account, no ads, no tracking", "Everything stays on this PC unless you turn on Google Drive sync or the remote dashboard. "
                         + "Zyclipra sends nothing to its developer.", null),
                 Ui.settingRow("Your microphone and screen", "The mic is only used while Voice effects are on; the screen only while recording or while Instant replay is on.", null),
+                Ui.settingRow("Check for updates automatically", "Shortly after Zyclipra starts it asks GitHub whether a newer version exists "
+                        + "(GitHub sees your IP address, like any website visit). Updates are signed by the developer and only install when you press the button.", autoCheck),
+                Ui.settingRow("Updates", null, Ui.row(8, checkNow, install)),
+                upState,
                 Ui.settingRow("Legal", "By using Zyclipra you agree to the EULA and Terms of Use. The same pages are on your dashboard (/privacy.html, /eula.html).", null),
                 Ui.row(8, link.apply(new String[]{"Privacy Policy", "privacy.html"}), link.apply(new String[]{"Terms of Use", "terms.html"}),
                         link.apply(new String[]{"EULA", "eula.html"}), link.apply(new String[]{"Third-party notices", "third-party-notices.txt"})),

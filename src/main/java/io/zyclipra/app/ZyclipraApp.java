@@ -20,6 +20,36 @@ public final class ZyclipraApp extends Application {
         boolean automated = CliOptions.automated();
         Path data = CliOptions.dataDir();
         if (data == null) data = automated ? Files.createTempDirectory("zyclipra-check") : AppPaths.defaultRoot();
+        if (CliOptions.screenshot() != null && "terms".equals(CliOptions.page())) {
+            // Check mode: render the terms screen off-screen and save it.
+            Platform.setImplicitExit(false);
+            io.zyclipra.ui.TermsGate.show(stage, data, AppContext.VERSION, true, () -> { });
+            stage.hide();
+            Path out = CliOptions.screenshot();
+            new Thread(() -> {
+                try {
+                    Thread.sleep(800);
+                    javafx.scene.image.WritableImage img = Checks.onFx(() -> stage.getScene().snapshot(null));
+                    Checks.save(img, out);
+                } catch (Exception e) { e.printStackTrace(); }
+                Runtime.getRuntime().halt(0);
+            }).start();
+            return;
+        }
+        // First run, after an update, or when the terms changed: nothing starts until the person accepts.
+        if (!automated && !io.zyclipra.ui.TermsGate.accepted(data, AppContext.VERSION)) {
+            boolean updated = Files.exists(data.resolve("settings.json"));
+            Path d = data;
+            io.zyclipra.ui.TermsGate.show(stage, data, AppContext.VERSION, updated, () -> {
+                try { startApp(stage, d, false); }
+                catch (Exception e) { throw new IllegalStateException(e); }
+            });
+            return;
+        }
+        startApp(stage, data, automated);
+    }
+
+    private void startApp(Stage stage, Path data, boolean automated) throws Exception {
         ctx = new AppContext(data, !automated);
         if (automated && CliOptions.dataDir() == null) {
             ctx.settings.recording.clipsDir = data.resolve("Clips").toString();

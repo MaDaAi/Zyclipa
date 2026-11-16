@@ -34,7 +34,7 @@ import java.util.logging.Logger;
 /** Builds every module and wires them together. The UI only talks to this. */
 public final class AppContext implements RemoteControl {
     private static final Logger LOG = Log.get(AppContext.class);
-    public static final String VERSION = "0.1.0";
+    public static final String VERSION = "0.2.0";
 
     public final AppPaths paths;
     public final SettingsStore store;
@@ -53,6 +53,9 @@ public final class AppContext implements RemoteControl {
     public final SyncService sync;
     public final DashboardAuth dashboardAuth;
     public final DashboardServer dashboard;
+    public final io.zyclipra.update.Updater updater;
+    /** A newer signed release found by the last check, or null. */
+    public volatile io.zyclipra.update.Updater.Release availableUpdate;
     public final io.zyclipra.remote.WebsiteLink website;
     private final Map<String, String> hotkeyErrors = new LinkedHashMap<>();
 
@@ -99,6 +102,15 @@ public final class AppContext implements RemoteControl {
         if (enableHotkeys) bindHotkeys();
         library.scanAsync();
         if (settings.mic.enabled) mic.start();
+        updater = new io.zyclipra.update.Updater(VERSION, paths.root().resolve("updates"));
+        if (enableHotkeys && settings.general.checkUpdates) {
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    Thread.sleep(8000);
+                    checkForUpdate();
+                } catch (Exception e) { LOG.info("update check: " + e.getMessage()); }
+            });
+        }
         if (settings.remote.enabled) {
             try { dashboard.start(); } catch (Exception e) { LOG.warning("Dashboard failed to start: " + e); }
         }
@@ -200,6 +212,15 @@ public final class AppContext implements RemoteControl {
             var os = (com.sun.management.OperatingSystemMXBean) java.lang.management.ManagementFactory.getOperatingSystemMXBean();
             return Math.round(os.getProcessCpuLoad() * 1000) / 10.0;
         } catch (Throwable t) { return -1; }
+    }
+
+    /** Asks GitHub for a newer signed release; tells the person once when one is found. */
+    public java.util.Optional<io.zyclipra.update.Updater.Release> checkForUpdate() throws java.io.IOException {
+        var r = updater.check();
+        boolean isNew = r.isPresent() && (availableUpdate == null || !availableUpdate.version().equals(r.get().version()));
+        availableUpdate = r.orElse(null);
+        if (isNew) bus.emit(EventBus.NOTIFY, "Zyclipra " + r.get().version() + " is available – install it in Settings › About and Privacy.");
+        return r;
     }
 
     @Override public JsonElement clips(int limit) {

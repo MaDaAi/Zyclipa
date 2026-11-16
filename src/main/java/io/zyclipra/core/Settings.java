@@ -26,6 +26,8 @@ public final class Settings {
         public boolean showOverlay = true;
         public boolean reduceMotion = false;
         public String ffmpegPath = "";
+        /** Look for a newer Zyclipra on GitHub shortly after start (nothing is installed without asking). */
+        public boolean checkUpdates = true;
     }
 
     public static final class Recording {
