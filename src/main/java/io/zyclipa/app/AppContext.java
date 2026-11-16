@@ -66,6 +66,7 @@ public final class AppContext implements RemoteControl {
         settings = store.get();
         desktop = Desktop.create();
         capture = new CaptureEngine(settings, desktop);
+        migrateOldClipsFolder();
         library = new ClipLibrary(() -> Path.of(settings.recording.clipsDir), paths.root().resolve("library.json"),
                 paths.thumbnails(), capture::ffmpeg, bus);
         recorder = new RecordingService(settings, capture, library, bus);
@@ -76,7 +77,8 @@ public final class AppContext implements RemoteControl {
         mic.setRouteDevice(settings.mic.routeDevice);
         mixer = new MixerService(store, AudioPlatform.create(), mic);
         mixer.setDryRun(!enableHotkeys);
-        soundboard = new SoundboardService(store, paths.soundsDir(), capture::ffmpeg, bus);
+        soundboard = new SoundboardService(store, settings.soundboard.folder == null || settings.soundboard.folder.isBlank()
+                ? paths.soundsDir() : java.nio.file.Path.of(settings.soundboard.folder), capture::ffmpeg, bus);
         soundboard.setRecordingTap(() -> capture.tracks().soundboardFeed());
         // Before 0.1.0 the app was called Zyclipra: carry saved secrets over to the new names.
         io.zyclipa.cloud.CredentialStore.migrate("Zyclipra/google-drive", "Zyclipa/google-drive");
@@ -248,6 +250,24 @@ public final class AppContext implements RemoteControl {
         } else if (autoReplay && now - lastGameAt > 120_000) {
             replay.stop();
             autoReplay = false;
+        }
+    }
+
+    /**
+     * Before 0.1.0 the default clips folder was Videos\Zyclipra. When the settings still point there (the person
+     * never chose another folder) it's renamed to Videos\Zyclipa once; any other folder is left alone.
+     */
+    private void migrateOldClipsFolder() {
+        try {
+            java.nio.file.Path old = io.zyclipa.core.AppPaths.oldDefaultClipsDir(), now = io.zyclipa.core.AppPaths.defaultClipsDir();
+            if (!java.nio.file.Path.of(settings.recording.clipsDir).toAbsolutePath().normalize().equals(old.toAbsolutePath().normalize())) return;
+            if (!java.nio.file.Files.isDirectory(old) || java.nio.file.Files.exists(now)) return;
+            java.nio.file.Files.move(old, now);
+            settings.recording.clipsDir = now.toString();
+            store.saveNow();
+            LOG.info("Moved the clips folder from the app's old name: " + old + " -> " + now);
+        } catch (Exception e) {
+            LOG.info("Kept the old clips folder (" + e.getMessage() + ")");
         }
     }
 

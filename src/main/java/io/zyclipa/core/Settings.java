@@ -37,6 +37,8 @@ public final class Settings {
 
     public static final class Recording {
         public String clipsDir = "";
+        /** Where exports (Discord, quality presets, MP3) are saved. */
+        public String exportsDir = "";
         /** Turn instant replay on by itself while a game is in front (and off again after the game closes). */
         public boolean autoReplayInGames = true;
         public String container = "mp4";      // mp4 | mkv
@@ -170,6 +172,8 @@ public final class Settings {
 
     public static final class Soundboard {
         public List<Sound> sounds = new ArrayList<>();
+        /** Folder holding the soundboard's sound files ("" = Zyclipa's data folder). */
+        public String folder = "";
         public List<String> categories = new ArrayList<>(List.of("General"));
         public String outputDevice = "";    // local playback device ("" = default)
         public String micRouteDevice = "";  // second device, e.g. a virtual cable feeding voice chat
@@ -255,6 +259,7 @@ public final class Settings {
 
         Recording r = recording;
         if (r.clipsDir == null || r.clipsDir.isBlank()) r.clipsDir = AppPaths.defaultClipsDir().toString();
+        if (r.exportsDir == null || r.exportsDir.isBlank()) r.exportsDir = AppPaths.defaultExportsDir().toString();
         if (!"mkv".equals(r.container)) r.container = "mp4";
         if (!"window".equals(r.captureMode)) r.captureMode = "display";
         if (r.windowTitle == null) r.windowTitle = "";

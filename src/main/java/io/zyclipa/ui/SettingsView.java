@@ -60,6 +60,7 @@ public final class SettingsView implements View {
         group(list, "GENERAL", "General", this::general);
         group(list, "CLIPS", "Capture and Sound", this::capture);
         link(list, "Clip Settings", this::clipSettings);
+        link(list, "Storage", this::storage);
         link(list, "Shortcuts", this::shortcuts);
         group(list, "CONNECT", "Cloud & Sync", this::cloud);
         link(list, "Hosting", this::dashboard);
@@ -277,6 +278,20 @@ public final class SettingsView implements View {
                 encInfo.setText(l.isEmpty() ? "FFmpeg not found." : "Using " + ctx.capture.encoder()
                         + (ctx.capture.encoder().equals("libx264") ? " (processor – no supported graphics card encoder found)" : " (graphics card – lighter on your games)"))));
 
+        return pageBox("Clip Settings", "Adjust settings for new clips and see how big they'll be.",
+                sub("Clip settings"),
+                Ui.label("Higher settings look better; lower settings are lighter on your PC and use less space.", "setting-desc"),
+                spacer(10),
+                Ui.row(12, Ui.field("Instant replay length", dur), Ui.field("Video quality", q), Ui.field("Resolution", res), Ui.field("FPS", fps)),
+                spacer(8),
+                Ui.row(12, Ui.field("File type", fmt), Ui.field("Encoder", enc)),
+                spacer(8), estimate, encInfo,
+                spacer(8), Ui.label("Where clips, exports and sounds are saved: Settings › Storage.", "small", "muted"));
+    }
+
+    // ---------------- Storage ----------------
+    private Node storage() {
+        Settings.Recording r = ctx.settings.recording;
         // disk usage bar
         Path root = Path.of(r.clipsDir);
         long total = 0, free = 0;
@@ -313,36 +328,89 @@ public final class SettingsView implements View {
         HBox legend = Ui.row(8, k1, Ui.label("Clips: " + Ui.bytes(clips) + " (" + ctx.library.all().size() + ")", "small"),
                 k2, Ui.label("Rest of PC: " + Ui.bytes(Math.max(0, used - clips)), "small"), Ui.grow(),
                 Ui.label("Room for about " + (free / perClip) + " more clips", "small"));
-        Label path = Ui.label(r.clipsDir, "accent-text");
-        Button change = Ui.button("CHANGE LOCATION", null, () -> {
-            DirectoryChooser dc = new DirectoryChooser();
-            dc.setTitle("Where should clips be saved?");
-            File cur = new File(r.clipsDir);
-            if (cur.isDirectory()) dc.setInitialDirectory(cur);
-            File f = dc.showDialog(node.getScene().getWindow());
-            if (f == null) return;
-            if (!Files.isWritable(f.toPath())) { win.toast("Zyclipa can't save into that folder.", true); return; }
-            r.clipsDir = f.getAbsolutePath();
-            save();
-            ctx.library.scanAsync();
-            open("Clip Settings");
-        }, "outline");
-        VBox loc = new VBox(4, Ui.label("Storage location", "h2"), path);
-        HBox locRow = Ui.row(10, loc, Ui.grow(), change);
-        locRow.getStyleClass().add("card");
-
-        return pageBox("Clip Settings", "Adjust settings for new clips, see how big they'll be, and choose where they're saved.",
-                sub("Clip settings"),
-                Ui.label("Higher settings look better; lower settings are lighter on your PC and use less space.", "setting-desc"),
-                spacer(10),
-                Ui.row(12, Ui.field("Instant replay length", dur), Ui.field("Video quality", q), Ui.field("Resolution", res), Ui.field("FPS", fps)),
-                spacer(8),
-                Ui.row(12, Ui.field("File type", fmt), Ui.field("Encoder", enc)),
-                spacer(8), estimate, encInfo,
+        Node clipsRow = folderRow("Clips", "Recordings, instant replays, trims and screenshots. Zyclipa shows everything in this folder.",
+                Path.of(r.clipsDir), to -> {
+                    Path from = Path.of(r.clipsDir);
+                    return moveFolder("clips", from, to, () -> {
+                        int n = io.zyclipa.core.Storage.moveContents(from, to, x -> true);
+                        r.clipsDir = to.toString();
+                        save();
+                        ctx.library.scanAsync();
+                        return n;
+                    }, () -> { r.clipsDir = to.toString(); save(); ctx.library.scanAsync(); });
+                });
+        Node exportsRow = folderRow("Exports", "Where Export saves files (Discord size, quality versions, MP3s).",
+                Path.of(r.exportsDir), to -> {
+                    r.exportsDir = to.toString();
+                    save();
+                    open("Storage");
+                    return true;
+                });
+        Node soundsRow = folderRow("Soundboard sounds", "Zyclipa's copies of your soundboard sounds (" + ctx.settings.soundboard.sounds.size() + " sounds).",
+                ctx.soundboard.folder(), to -> moveFolder("sounds", ctx.soundboard.folder(), to, () -> {
+                    int n = ctx.soundboard.moveTo(to);
+                    ctx.settings.soundboard.folder = to.toString();
+                    save();
+                    return n;
+                }, null));
+        return pageBox("Storage", "Where Zyclipa saves your clips, exports and soundboard sounds, and how much room is left.",
                 sub("Hard drive space"),
                 Ui.row(10, Ui.label(Ui.bytes(free) + " free of " + Ui.bytes(total), "h3"), Ui.grow(),
                         Ui.label(total == 0 ? "" : (100 * used / tt) + "% used", "muted")),
-                barBox, legend, spacer(14), locRow);
+                barBox, legend,
+                sub("Folders"), clipsRow, spacer(8), exportsRow, spacer(8), soundsRow);
+    }
+
+    /** One folder: name, what it's for, its path, and Open / Change. {@code change} returns true when it's done. */
+    private Node folderRow(String name, String what, Path dir, java.util.function.Function<Path, Boolean> change) {
+        Label path = Ui.label(dir.toString(), "accent-text");
+        Button openBtn = Ui.button("Open", Icons.FOLDER, () -> {
+            try { Files.createDirectories(dir); java.awt.Desktop.getDesktop().open(dir.toFile()); }
+            catch (Exception e) { win.toast("Couldn't open the folder: " + e.getMessage(), true); }
+        }, "outline");
+        Button changeBtn = Ui.button("Change", null, () -> {
+            DirectoryChooser dc = new DirectoryChooser();
+            dc.setTitle("Choose a folder for " + name.toLowerCase(Locale.ROOT));
+            if (Files.isDirectory(dir)) dc.setInitialDirectory(dir.toFile());
+            File f = dc.showDialog(node.getScene().getWindow());
+            if (f == null || f.toPath().toAbsolutePath().normalize().equals(dir.toAbsolutePath().normalize())) return;
+            if (!Files.isWritable(f.toPath())) { win.toast("Zyclipa can't save into that folder.", true); return; }
+            change.apply(f.toPath());
+        }, "outline");
+        openBtn.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        changeBtn.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        VBox text = new VBox(3, Ui.label(name, "h2"), Ui.label(what, "small", "muted"), path);
+        HBox.setHgrow(text, Priority.ALWAYS);
+        HBox row = Ui.row(10, text, openBtn, changeBtn);
+        row.getStyleClass().add("card");
+        return row;
+    }
+
+    /**
+     * Asks whether to bring the existing files along. Moving runs in the background; {@code justSwitch} (when given)
+     * points Zyclipa at the new folder without moving anything.
+     */
+    private boolean moveFolder(String what, Path from, Path to, java.util.concurrent.Callable<Integer> move, Runnable justSwitch) {
+        javafx.scene.control.ButtonType moveIt = new javafx.scene.control.ButtonType("Move my " + what);
+        javafx.scene.control.ButtonType switchOnly = new javafx.scene.control.ButtonType("Only use it for new " + what);
+        javafx.scene.control.Alert a = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.CONFIRMATION,
+                "Move the " + what + " that are already in\n" + from + "\nto\n" + to + "?", moveIt);
+        if (justSwitch != null) a.getButtonTypes().add(switchOnly);
+        a.getButtonTypes().add(javafx.scene.control.ButtonType.CANCEL);
+        a.setHeaderText("Use the new " + what + " folder");
+        a.initOwner(node.getScene().getWindow());
+        var choice = a.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL);
+        if (choice == switchOnly) { justSwitch.run(); open("Storage"); return true; }
+        if (choice != moveIt) return false;
+        win.toast("Moving your " + what + "…", false);
+        CompletableFuture.supplyAsync(() -> {
+            try { return move.call(); } catch (Exception e) { throw new RuntimeException(e.getMessage(), e); }
+        }).whenComplete((n, e) -> Ui.fx(() -> {
+            if (e != null) win.toast("Couldn't move them: " + (e.getCause() != null ? e.getCause().getMessage() : e.getMessage()), true);
+            else win.toast(n == 0 ? "Moved. New " + what + " go to " + to + "." : "Moved – " + n + " item(s) with the same name were already there and were left in the old folder.", n != 0);
+            open("Storage");
+        }));
+        return true;
     }
 
     private static javafx.scene.layout.Region spacer(double h) {

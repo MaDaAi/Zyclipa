@@ -40,7 +40,7 @@ public final class SoundboardService {
     private final SettingsStore store;
     private final Settings.Soundboard cfg;
     private final Settings settings;
-    private final Path dir;
+    private volatile Path dir;
     private final Supplier<Optional<Ffmpeg>> ffmpeg;
     private final EventBus bus;
     private final Map<String, byte[]> pcm = new ConcurrentHashMap<>();
@@ -141,6 +141,18 @@ public final class SoundboardService {
     public Set<String> playingIds() { return Set.copyOf(playing.keySet()); }
 
     /** Imports (copies and converts) an audio file. Throws with a clear message for bad files. */
+    public Path folder() { return dir; }
+
+    /** Moves the sound files to {@code to} and plays them from there. Returns how many couldn't be moved. */
+    public synchronized int moveTo(Path to) throws IOException {
+        java.util.Set<String> mine = new java.util.HashSet<>();
+        for (Settings.Sound s : store.get().soundboard.sounds) mine.add(s.file);
+        stopAll();
+        int skipped = io.zyclipa.core.Storage.moveContents(dir, to, p -> mine.contains(p.getFileName().toString()));
+        dir = to;
+        return skipped;
+    }
+
     public Settings.Sound importFile(Path src, String category) throws IOException, InterruptedException {
         if (!Files.isRegularFile(src)) throw new IOException("File not found.");
         String name = src.getFileName().toString();

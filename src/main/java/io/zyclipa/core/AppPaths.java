@@ -40,6 +40,16 @@ public final class AppPaths {
         }
     }
 
+    /** Exports go next to the clips folder (not inside it, so they don't show up as clips). */
+    public static Path defaultExportsDir() {
+        return defaultClipsDir().resolveSibling("Zyclipa Exports");
+    }
+
+    /** The clips folder older versions made when the app was still called Zyclipra. */
+    public static Path oldDefaultClipsDir() {
+        return defaultClipsDir().resolveSibling("Zyclipra");
+    }
+
     public static Path defaultClipsDir() {
         Path videos = Path.of(System.getProperty("user.home"), "Videos");
         return (Files.isDirectory(videos) ? videos : Path.of(System.getProperty("user.home"))).resolve("Zyclipa");

@@ -1020,15 +1020,16 @@ final class ClipEditor {
     }
 
     private void export() {
-        ExportDialog.show(root.getScene().getWindow(), clip, edited(), out - in, kind -> {
-            javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
-            fc.setTitle("Export clip");
-            String base = clip.title.replaceAll("[\\\\/:*?\"<>|]", "_");
+        ExportDialog.show(root.getScene().getWindow(), clip, edited(), out - in, ctx.settings.recording.exportsDir, kind -> {
+            // Saved straight into the export folder (Settings › Storage), never over an earlier export.
+            String base = clip.title.replaceAll("[\\\\/:*?\"<>|]", "_").strip();
             String suffix = switch (kind) { case DISCORD -> " (Discord)"; case Q75 -> " (75%)"; case Q50 -> " (50%)"; case Q25 -> " (25%)"; default -> ""; };
-            fc.setInitialFileName(base + suffix + "." + kind.ext);
-            fc.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter(kind.ext.toUpperCase() + " file", "*." + kind.ext));
-            java.io.File f = fc.showSaveDialog(root.getScene().getWindow());
-            if (f == null) return;
+            java.nio.file.Path dir = java.nio.file.Path.of(ctx.settings.recording.exportsDir);
+            try { java.nio.file.Files.createDirectories(dir); }
+            catch (Exception ex) { win.toast("Can't use the export folder " + dir + " – change it in Settings › Storage.", true); return; }
+            java.nio.file.Path target = dir.resolve(base + suffix + "." + kind.ext);
+            for (int i = 2; java.nio.file.Files.exists(target); i++) target = dir.resolve(base + suffix + " (" + i + ")." + kind.ext);
+            java.io.File f = target.toFile();
             Clip.Edit e = currentEdit();
             win.toast("Exporting " + kind.title.toLowerCase() + "…", false);
             CompletableFuture.runAsync(() -> {

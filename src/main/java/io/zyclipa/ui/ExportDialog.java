@@ -23,7 +23,7 @@ import java.util.function.Consumer;
 final class ExportDialog {
     private ExportDialog() { }
 
-    static void show(Window owner, Clip clip, boolean edited, double seconds, Consumer<Export> go) {
+    static void show(Window owner, Clip clip, boolean edited, double seconds, String folder, Consumer<Export> go) {
         Stage st = new Stage();
         st.initOwner(owner);
         st.initModality(Modality.WINDOW_MODAL);
@@ -62,16 +62,17 @@ final class ExportDialog {
         Label note = Ui.label(edited ? "Uses your edits: the trimmed part, 9:16, captions and track volumes (mixed into one track so it plays everywhere)."
                 : "Shared videos get one mixed audio track so they play everywhere.", "small", "muted");
         Button cancel = Ui.button("Cancel", null, st::close, "outline");
-        Button ok = Ui.button("Export…", null, () -> { st.close(); go.accept((Export) g.getSelectedToggle().getUserData()); }, "primary");
+        Button ok = Ui.button("Export", null, () -> { st.close(); go.accept((Export) g.getSelectedToggle().getUserData()); }, "primary");
         ok.setDefaultButton(true);
         cancel.setCancelButton(true);
         Region grow = new Region();
         HBox.setHgrow(grow, Priority.ALWAYS);
-        VBox box = new VBox(12, Ui.label("Export “" + clip.title + "”", "h1"), list, note, new HBox(10, grow, cancel, ok));
+        Label where = Ui.label("Saved to " + folder + " (change it in Settings › Storage).", "small", "muted");
+        VBox box = new VBox(12, Ui.label("Export “" + clip.title + "”", "h1"), list, note, where, new HBox(10, grow, cancel, ok));
         box.setPadding(new Insets(20));
         box.getStyleClass().add("dialog-root");
         if (Theme.light()) box.getStyleClass().add("light");
-        Scene sc = new Scene(box, 560, 600);
+        Scene sc = new Scene(box, 560, 630);
         sc.getStylesheets().add(ExportDialog.class.getResource("/ui/zyclipa.css").toExternalForm());
         st.setScene(sc);
         st.show();
