@@ -70,7 +70,7 @@ public class SignRelease {
                 + ",\n  \"notes\": \"" + notes.replace("\\", "\\\\").replace("\"", "\\\"") + "\",\n  \"signature\": \"" + sig + "\"\n}\n";
         Path out = zip.resolveSibling("zyclipa-update.json");
         Files.writeString(out, json);
-        System.out.println("Wrote " + out + "\nUpload BOTH files to a GitHub release tagged v" + version
-                + " in MaDaAi/zyclipa-dashboard:\n  " + zip.getFileName() + "\n  zyclipa-update.json");
+        System.out.println("Wrote " + out + "\n1. Upload " + zip.getFileName() + " to a GitHub release tagged v" + version
+                + " in MaDaAi/zyclipa-dashboard.\n2. After it's published, put zyclipa-update.json in the website repo (that tells apps the update exists).");
     }
 }
