@@ -27,14 +27,14 @@
       "group": "recording",
       "value": 2,
       "unit": "s",
-      "source": "Zyclipra design (ReplayBuffer.SEGMENT_SEC)"
+      "source": "Zyclipa design (ReplayBuffer.SEGMENT_SEC)"
     },
     {
       "name": "keyframe interval",
       "group": "recording",
       "value": 2,
       "unit": "s",
-      "source": "Zyclipra design (GOP = fps x 2)"
+      "source": "Zyclipa design (GOP = fps x 2)"
     },
     {
       "name": "default frame rate",

@@ -1,4 +1,4 @@
-@REM Zyclipra Maven launcher: uses (and if needed downloads) Maven 3.9.9 inside this project's
+@REM Zyclipa Maven launcher: uses (and if needed downloads) Maven 3.9.9 inside this project's
 @REM .tools folder, so nothing has to be installed system-wide. Dependencies go to .m2\ here too.
 @echo off
 setlocal

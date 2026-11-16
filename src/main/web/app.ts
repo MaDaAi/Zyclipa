@@ -1,5 +1,5 @@
-// Zyclipra dashboard (served by the Zyclipra app on your PC).
-// Security: every call sends the X-Zyclipra header (CSRF protection) and relies on an HttpOnly session cookie –
+// Zyclipa dashboard (served by the Zyclipa app on your PC).
+// Security: every call sends the X-Zyclipa header (CSRF protection) and relies on an HttpOnly session cookie –
 // nothing about the sign-in is kept in localStorage. Commands carry a random X-Command-Id so a double tap or a
 // retried request runs only once on the PC. Google tokens never reach this page.
 
@@ -35,6 +35,18 @@ interface Result { ok?: string; error?: string; clip?: { id: string; title: stri
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
+// ---- appearance: follows the device unless chosen in Settings (kept in this browser only)
+function applyTheme(t: string): void { if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+let savedTheme = "";
+try { savedTheme = localStorage.getItem("zy-theme") || ""; } catch (e) { /* storage blocked */ }
+applyTheme(savedTheme);
+document.addEventListener("DOMContentLoaded", () => {
+  const pick = document.getElementById("theme-pick") as HTMLSelectElement | null;
+  if (!pick) return;
+  pick.value = savedTheme;
+  pick.onchange = () => { try { localStorage.setItem("zy-theme", pick.value); } catch (e) { /* storage blocked */ } applyTheme(pick.value); };
+});
+
 // ---------------- talking to the PC ----------------
 
 type Conn = "connecting" | "online" | "interrupted" | "signin";
@@ -52,12 +64,12 @@ function setConn(c: Conn): void {
 async function api<T>(path: string, body?: object, commandId?: string): Promise<T> {
   let res: Response;
   try {
-    const headers: Record<string, string> = { "X-Zyclipra": "1", "Content-Type": "application/json" };
+    const headers: Record<string, string> = { "X-Zyclipa": "1", "Content-Type": "application/json" };
     if (commandId) headers["X-Command-Id"] = commandId;
     res = await fetch("/api/" + path, { method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined, credentials: "same-origin" });
   } catch {
     setConn("interrupted");
-    throw new Error("Can't reach your PC. Is Zyclipra still running?");
+    throw new Error("Can't reach your PC. Is Zyclipa still running?");
   }
   if (res.status === 401 && path !== "login") { showLogin(); throw new Error("Please sign in."); }
   const data = await res.json();
@@ -286,7 +298,7 @@ function paintStatus(): void {
   text($("replay-state"), s.replay ? "On · " + Math.min(s.replayAvailable, s.replaySeconds) + " of " + s.replaySeconds + " s buffered" : "Off");
   const len = $("replay-length") as HTMLSelectElement;
   if (document.activeElement !== len) len.value = String(s.replaySeconds);
-  text($("sys"), `Zyclipra ${s.version} · ${s.clips} clips (${fmtBytes(s.storageBytes)}) · CPU ${s.cpuLoad}%`);
+  text($("sys"), `Zyclipa ${s.version} · ${s.clips} clips (${fmtBytes(s.storageBytes)}) · CPU ${s.cpuLoad}%`);
 }
 
 function clipIt(): void {
@@ -383,7 +395,7 @@ function renderClips(): void {
 }
 
 function syncBadge(state: string): HTMLElement {
-  const b = el("span", "sync sync-" + state, state === "synced" ? "☁ ✓" : state === "uploading" ? "☁ ↑" : state === "queued" ? "☁ …" : state === "failed" ? "☁ !" : "☁ ✕");
+  const b = el("span", "sync sync-" + state, state === "synced" ? "Drive ✓" : state === "uploading" ? "Drive ↑" : state === "queued" ? "Drive …" : state === "failed" ? "Drive !" : "Drive ✕");
   b.title = SYNC_LABEL[state] || state;
   return b;
 }
@@ -519,7 +531,7 @@ function renderPads(): void {
   box.replaceChildren();
   const list = visibleSounds();
   if (list.length === 0) {
-    box.appendChild(el("p", "empty muted", board.sounds.length === 0 ? "No sounds yet. Add MP3 or WAV files in the Zyclipra app (Soundboard › Add sounds)." : "No sounds on this page."));
+    box.appendChild(el("p", "empty muted", board.sounds.length === 0 ? "No sounds yet. Add MP3 or WAV files in the Zyclipa app (Soundboard › Add sounds)." : "No sounds on this page."));
     return;
   }
   for (const s of list) box.appendChild(pad(s));
@@ -530,11 +542,11 @@ function pad(s: Sound): HTMLElement {
   const b = el("button", "sound");
   b.dataset.id = s.id;
   if (s.color) b.style.setProperty("--pad", s.color);
-  const icon = el("span", "sound-icon", s.icon || "♪");
+  const icon = el("span", "sound-icon", s.icon || "");
   const name = el("span", "sound-name", s.name);
   const meta = el("span", "sound-meta", (s.volume !== 1 ? Math.round(s.volume * 100) + "% · " : "") + fmtDur(s.duration));
   const bar = el("span", "sound-progress");
-  const stop = el("span", "sound-stop", "■");
+  const stop = el("span", "sound-stop");
   stop.setAttribute("role", "button");
   stop.setAttribute("aria-label", "Stop " + s.name);
   b.append(icon, name, meta, bar, stop);
@@ -619,8 +631,8 @@ async function loadCloud(): Promise<void> {
   avatar.hidden = !c.hasAvatar;
   if (c.hasAvatar && !avatar.src) avatar.src = "/api/cloud/avatar";
   text($("cloud-title"), c.connected ? (c.name || "Google Drive") : "Google Drive");
-  text($("cloud-account"), c.connected ? "● Connected as " + c.email : !c.configured ? "This copy of Zyclipra was built without Google sign-in."
-    : (c.needsReauth ? "Google asked Zyclipra to sign in again. " : "Not connected. ") + "The Google window opens in the browser on your PC.");
+  text($("cloud-account"), c.connected ? "● Connected as " + c.email : !c.configured ? "This copy of Zyclipa was built without Google sign-in."
+    : (c.needsReauth ? "Google asked Zyclipa to sign in again. " : "Not connected. ") + "The Google window opens in the browser on your PC.");
   $("cloud-account").className = c.connected ? "ok-text" : c.needsReauth ? "warn-text" : "muted";
   $("cloud-connect").hidden = c.connected || !c.configured;
   text($("cloud-connect"), c.needsReauth ? "Sign in with Google again" : "Sign in with Google");
@@ -686,7 +698,7 @@ async function loadAccount(): Promise<void> {
   const h = a.hosting;
   const where = h.mode === "public" ? "the internet through your HTTPS reverse proxy (" + h.publicUrl + ")"
     : ["this PC", h.lan ? "your home network" : "", h.vpn ? "your Tailscale network" : ""].filter(x => x).join(", ");
-  text($("acc-hosting"), "Reachable from " + where + ". Encrypted (HTTPS). Change this in Zyclipra › Settings › Hosting.");
+  text($("acc-hosting"), "Reachable from " + where + ". Encrypted (HTTPS). Change this in Zyclipa › Settings › Hosting.");
   ($("pw-new") as HTMLInputElement).minLength = a.minPasswordLength;
   ($("pw-new") as HTMLInputElement).placeholder = "at least " + a.minPasswordLength + " characters";
   ($("user-new") as HTMLInputElement).value = a.username;
@@ -820,7 +832,7 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const ms of [5000, 15000, 30000, 60000]) window.setTimeout(() => loadCloud().catch(() => undefined), ms);
   }));
   $("cloud-disconnect").addEventListener("click", () => {
-    if (window.confirm("Disconnect Google Drive? Zyclipra stops uploading. Nothing is deleted on Google Drive or your PC."))
+    if (window.confirm("Disconnect Google Drive? Zyclipa stops uploading. Nothing is deleted on Google Drive or your PC."))
       run("cloud/disconnect", {}, $("cloud-disconnect") as HTMLButtonElement, () => loadCloud().catch(() => undefined));
   });
   $("retry-all").addEventListener("click", () => run("cloud/retry", {}, $("retry-all") as HTMLButtonElement, () => loadCloud().catch(() => undefined)));
@@ -835,7 +847,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.appendChild(ticks);
 
   api<{ configured: boolean }>("setup").then(s => {
-    if (!s.configured) text($("login-hint"), "The dashboard isn't set up yet. In Zyclipra on your PC, open Settings › Hosting and create a username and password.");
+    if (!s.configured) text($("login-hint"), "The dashboard isn't set up yet. In Zyclipa on your PC, open Settings › Hosting and create a username and password.");
   }).catch(() => undefined);
   api<Status>("status").then(showApp).catch(() => undefined);
 });

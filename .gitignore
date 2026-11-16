@@ -12,7 +12,7 @@ shots/
 *.mov
 *.log
 
-# Secrets and per-user data (the app keeps these in %APPDATA%\Zyclipra, but just in case)
+# Secrets and per-user data (the app keeps these in %APPDATA%\Zyclipa, but just in case)
 *.p12
 *.jks
 *.key
@@ -22,5 +22,5 @@ library.json
 .env
 .claude/
 
-# Zyclipra's Google OAuth client (packaged into builds, never published)
+# Zyclipa's Google OAuth client (packaged into builds, never published)
 /private/

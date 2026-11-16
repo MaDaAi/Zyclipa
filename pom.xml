@@ -4,10 +4,10 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>io.zyclipra</groupId>
-  <artifactId>zyclipra</artifactId>
-  <version>0.2.0</version>
-  <name>Zyclipra</name>
+  <groupId>io.zyclipa</groupId>
+  <artifactId>zyclipa</artifactId>
+  <version>0.1.0</version>
+  <name>Zyclipa</name>
   <description>Free, open-source gaming utility: recording, instant replay, clips, audio mixer and soundboard.</description>
   <licenses>
     <license><name>MIT</name><url>https://opensource.org/licenses/MIT</url></license>
@@ -18,7 +18,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <javafx.version>23.0.2</javafx.version>
     <jna.version>5.19.1</jna.version>
-    <main.class>io.zyclipra.Launcher</main.class>
+    <main.class>io.zyclipa.Launcher</main.class>
   </properties>
 
   <dependencies>
@@ -46,7 +46,7 @@
   <build>
     <resources>
       <resource><directory>src/main/resources</directory></resource>
-      <!-- Zyclipra's Google OAuth client, kept out of git (see GoogleClient). Builds without it simply have no Google sign-in. -->
+      <!-- Zyclipa's Google OAuth client, kept out of git (see GoogleClient). Builds without it simply have no Google sign-in. -->
       <resource>
         <directory>private</directory>
         <includes><include>google-oauth.json</include></includes>
@@ -86,7 +86,7 @@
             <phase>package</phase>
             <goals><goal>shade</goal></goals>
             <configuration>
-              <outputFile>${project.build.directory}/zyclipra.jar</outputFile>
+              <outputFile>${project.build.directory}/zyclipa.jar</outputFile>
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <filters>
                 <filter>
@@ -104,7 +104,7 @@
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>${main.class}</mainClass>
                   <manifestEntries>
-                    <Implementation-Title>Zyclipra</Implementation-Title>
+                    <Implementation-Title>Zyclipa</Implementation-Title>
                     <Implementation-Version>${project.version}</Implementation-Version>
                     <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
                   </manifestEntries>

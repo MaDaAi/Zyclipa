@@ -35,13 +35,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          java -jar target/zyclipra.jar --self-test target/selftest.json
+          java -jar target/zyclipa.jar --self-test target/selftest.json
           Get-Content target/selftest.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: zyclipra-${{ matrix.os }}
+          name: zyclipa-${{ matrix.os }}
           path: |
-            target/zyclipra.jar
+            target/zyclipa.jar
             target/selftest.json
 
   installer:
@@ -61,5 +61,5 @@ jobs:
         run: ./packaging/build-installer.ps1 -Type msi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: zyclipra-windows-installer
+          name: zyclipa-windows-installer
           path: dist/*.msi

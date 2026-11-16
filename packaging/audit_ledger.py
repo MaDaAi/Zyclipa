@@ -4,8 +4,8 @@ import csv, pathlib, collections
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 P, F, U, N = 'PASS', 'FAIL', 'UNKNOWN', 'NOT APPLICABLE'
 NA_DB = 'No database: data lives in local files on the owner\'s PC and in their own Google Drive.'
-NA_AI = 'Zyclipra has no AI/LLM features, prompts, retrieval or agents.'
-NA_PAY = 'Zyclipra is free: no payments, purchases, subscriptions or webhooks.'
+NA_AI = 'Zyclipa has no AI/LLM features, prompts, retrieval or agents.'
+NA_PAY = 'Zyclipa is free: no payments, purchases, subscriptions or webhooks.'
 
 rows = [
  ('01', 'Exposed database credentials', N, '', NA_DB, '', 'Searched source/config for DB drivers and URLs: none.'),
@@ -16,8 +16,8 @@ rows = [
  ('06', 'Cross-user data access', P, '', 'No shared backend: each PC has its own credentials and link key; each user reads only their own Drive via their own Google token (drive.file).', '', 'wrong key → 401; token without website origin → 401; RtcRouteTest blocked routes'),
  ('07', 'Open database permissions', N, '', NA_DB, '', ''),
  ('08', 'Misconfigured Firebase / Supabase / S3', P, '', 'Only Google Drive (drive.file, files private to the owner, no sharing/permission calls) and GitHub Pages (public static files only).', '', 'grep for Drive permissions API: none'),
- ('09', 'Unprotected admin routes', P, '', 'Account/session/password routes need a password session and the X-Zyclipra header + same-origin; never available to website sessions.', '', 'RemoteTest; webtest.py'),
- ('10', 'Production debug tools exposed', P, '', 'Diagnostic flags (--self-test, -Dzyclipra.*) are local command-line only; no network debug endpoints; Zyclipra.cfg has no debug agents.', '', 'Zyclipra.cfg reviewed; route list reviewed'),
+ ('09', 'Unprotected admin routes', P, '', 'Account/session/password routes need a password session and the X-Zyclipa header + same-origin; never available to website sessions.', '', 'RemoteTest; webtest.py'),
+ ('10', 'Production debug tools exposed', P, '', 'Diagnostic flags (--self-test, -Dzyclipa.*) are local command-line only; no network debug endpoints; Zyclipa.cfg has no debug agents.', '', 'Zyclipa.cfg reviewed; route list reviewed'),
  ('11', 'Build logs leaking secrets', P, '', 'CI workflows use no secrets and print none; Pages build copies static files.', '', 'workflow review'),
  ('12', 'Verbose production errors', P, '', 'Unexpected errors return a generic message; details stay in the local log.', '', 'DashboardServer.handle catch-all; RtcBridge.route catches'),
  ('13', 'Secrets in Git history', P, '', 'Both repos\' full histories scanned for Google secrets, private keys, API keys, OAuth tokens.', '', 'git grep over git rev-list --all: only a docs placeholder'),

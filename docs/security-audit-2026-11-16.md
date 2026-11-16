@@ -1,8 +1,8 @@
-# Zyclipra security, privacy and launch audit – 16 November 2026
+# Zyclipa security, privacy and launch audit – 16 November 2026
 
 ## Overview
-- **Project:** Zyclipra 0.1.0 – Windows desktop app (Java 21 target, JavaFX, packaged with jpackage) with a built-in HTTPS dashboard on the PC, plus a static companion website on GitHub Pages (`madaai.github.io/zyclipra-dashboard`, repo `MaDaAi/zyclipra-dashboard`) that connects to the PC over WebRTC on the same network.
-- **Inspected:** source, tests, `pom.xml`, both GitHub Actions workflows, the packaged `dist/Zyclipra` folder, the live website (HTTP headers, pages, 404), and a running copy of the app with synthetic data (scratch data folder, test account).
+- **Project:** Zyclipa 0.1.0 – Windows desktop app (Java 21 target, JavaFX, packaged with jpackage) with a built-in HTTPS dashboard on the PC, plus a static companion website on GitHub Pages (`madaai.github.io/zyclipa-dashboard`, repo `MaDaAi/zyclipa-dashboard`) that connects to the PC over WebRTC on the same network.
+- **Inspected:** source, tests, `pom.xml`, both GitHub Actions workflows, the packaged `dist/Zyclipa` folder, the live website (HTTP headers, pages, 404), and a running copy of the app with synthetic data (scratch data folder, test account).
 - **Not inspected:** the owner's GitHub and Google Cloud account settings (MFA), Google's OAuth consent-screen review, independent penetration testing, and iPhone/Android browsers beyond the owner's own manual tests.
 - **Owner jurisdiction:** Ontario, Canada (stated by the owner). Contact: notefirasupport@gmail.com (stated by the owner).
 - **Threat model (short):**
@@ -54,7 +54,7 @@ See the table at the end of this file (generated from `security-checks.csv`).
 | Honest marketing | PASS | No reviews, ratings or "best" claims. "Open source" changed to "MIT-licensed" while the repo is private. Non-affiliation statement added. |
 | Copyright: images, icons, fonts | PASS | Logo and icons are the owner's own. Emoji come from system fonts. No third-party images, music or fonts bundled. |
 | Software licences | PASS | `THIRD-PARTY-NOTICES.txt` (OpenJFX GPLv2+CE, Apache-2.0, BSD WebRTC + patents, Bouncy Castle, NVIDIA header) and `LICENSE.txt` ship next to the exe and on both sites. FFmpeg isn't bundled. |
-| Trademark ("Zyclipra") | UNKNOWN | No trademark search was done. Search CIPO and USPTO before promoting the name. |
+| Trademark ("Zyclipa") | UNKNOWN | No trademark search was done. Search CIPO and USPTO before promoting the name. |
 | Google OAuth policy | UNKNOWN | The app is in Testing mode (test users only). A public launch needs Google verification, which needs the privacy and terms links (now present). |
 | Desktop platform | PARTIAL | Credential Manager for secrets, no admin rights, no drivers, local server loopback by default.<br>The exe now bundles Temurin 21.0.13 LTS.<br>Open: the exe isn't code-signed (SmartScreen warnings, no tamper evidence), and there's no auto-update channel. |
 
@@ -100,7 +100,7 @@ Rollback: each change is self-contained and can be reverted on its own; behaviou
 1. **Bundled runtime (check 37) – done.** The exe was rebuilt with Eclipse Temurin 21.0.13 LTS, downloaded with your approval and SHA-256 verified. Update it each quarter.
 2. **MFA (check 55).** Turn on 2-step verification for your GitHub and Google accounts.
 3. **Human review (check 50).** Have someone review the auth and remote-control code before a public launch.
-4. **Legal review.** Have a lawyer review the privacy policy, terms and EULA. Run a trademark search for "Zyclipra".
+4. **Legal review.** Have a lawyer review the privacy policy, terms and EULA. Run a trademark search for "Zyclipa".
 5. **Google verification.** Submit the Google sign-in for verification before inviting the public.
 6. **Optional, check 46.** Host the website somewhere that allows headers (for example Cloudflare Pages, free) to add nosniff and frame-ancestors headers.
 7. **Optional.** Code-sign the exe.
@@ -128,8 +128,8 @@ No audit can guarantee immunity from attacks or legal claims.
 | 06 | Cross-user data access | PASS |  | No shared backend: each PC has its own credentials and link key; each user reads only their own Drive via their own Google token (drive.file). |  | wrong key → 401; token without website origin → 401; RtcRouteTest blocked routes |
 | 07 | Open database permissions | NOT APPLICABLE |  | No database: data lives in local files on the owner's PC and in their own Google Drive. |  |  |
 | 08 | Misconfigured Firebase / Supabase / S3 | PASS |  | Only Google Drive (drive.file, files private to the owner, no sharing/permission calls) and GitHub Pages (public static files only). |  | grep for Drive permissions API: none |
-| 09 | Unprotected admin routes | PASS |  | Account/session/password routes need a password session and the X-Zyclipra header + same-origin; never available to website sessions. |  | RemoteTest; webtest.py |
-| 10 | Production debug tools exposed | PASS |  | Diagnostic flags (--self-test, -Dzyclipra.*) are local command-line only; no network debug endpoints; Zyclipra.cfg has no debug agents. |  | Zyclipra.cfg reviewed; route list reviewed |
+| 09 | Unprotected admin routes | PASS |  | Account/session/password routes need a password session and the X-Zyclipa header + same-origin; never available to website sessions. |  | RemoteTest; webtest.py |
+| 10 | Production debug tools exposed | PASS |  | Diagnostic flags (--self-test, -Dzyclipa.*) are local command-line only; no network debug endpoints; Zyclipa.cfg has no debug agents. |  | Zyclipa.cfg reviewed; route list reviewed |
 | 11 | Build logs leaking secrets | PASS |  | CI workflows use no secrets and print none; Pages build copies static files. |  | workflow review |
 | 12 | Verbose production errors | PASS |  | Unexpected errors return a generic message; details stay in the local log. |  | DashboardServer.handle catch-all; RtcBridge.route catches |
 | 13 | Secrets in Git history | PASS |  | Both repos' full histories scanned for Google secrets, private keys, API keys, OAuth tokens. |  | git grep over git rev-list --all: only a docs placeholder |
@@ -150,16 +150,16 @@ No audit can guarantee immunity from attacks or legal claims.
 | 28 | Missing rate limits | PASS |  | Login and website-key lock-outs (per address + global), sound triggers 10/5 s, flood guard 3000 req/min per address. |  | AuthAlertTest; CommandsTest |
 | 29 | Unprotected staging or test environments | NOT APPLICABLE |  | No staging environment; tests use synthetic data in temporary folders. |  |  |
 | 30 | Default credentials left unchanged | PASS |  | No default accounts: the dashboard won't start until the owner creates credentials. |  | DashboardServer.start requires configured() |
-| 31 | Webhook signatures not verified | NOT APPLICABLE |  | Zyclipra is free: no payments, purchases, subscriptions or webhooks. |  |  |
-| 32 | Frontend-only payment checks | NOT APPLICABLE |  | Zyclipra is free: no payments, purchases, subscriptions or webhooks. |  |  |
+| 31 | Webhook signatures not verified | NOT APPLICABLE |  | Zyclipa is free: no payments, purchases, subscriptions or webhooks. |  |  |
+| 32 | Frontend-only payment checks | NOT APPLICABLE |  | Zyclipa is free: no payments, purchases, subscriptions or webhooks. |  |  |
 | 33 | IDOR / BOLA | PASS |  | Single-owner PC: every object is the owner's; ids are validated and resolved server-side; commands deduplicated per caller. |  | RtcRouteTest; CommandsTest |
 | 34 | APIs trusting user-controlled roles or IDs | PASS |  | Caller identity comes from the server-side session; no role/owner fields are accepted. |  | route review |
 | 35 | Sensitive data in logs | PASS |  | Logs hold no tokens, passwords or emails; sign-in logs record time, address and a session hash only. |  | grep of log statements |
 | 36 | Sensitive source maps or build artifacts | PASS |  | No source maps; the website deploys an explicit file list; the jar contains no private data beyond the OAuth client (see 03). |  | tsconfig, workflow and jar listing |
 | 37 | Vulnerable or abandoned dependencies | PASS |  | Fixed: the exe now bundles Eclipse Temurin 21.0.13 LTS (Oct 2026 security update, SHA-256 verified) instead of end-of-life Java 24.0.1. Libraries upgraded (BouncyCastle 1.86, JNA 5.19.1, Gson 2.15.0); JavaFX 23.0.2 kept (no known applicable issue). | Keep the JDK on the latest 21.0.x update each quarter and rebuild. | 69 tests on 21.0.13; new exe ran, 15/15 dashboard security checks, WebRTC interop OK; runtime/release = 21.0.13 |
 | 38 | Malicious or compromised packages | PASS | LOW | All from Maven Central, exact versions, established publishers, releases at least 2 weeks old; webrtc-java ships a native DLL from a single maintainer. | Consider verifying artifact signatures (PGP) in CI. | pom review; Maven checksum validation |
-| 39 | Prompt injection | NOT APPLICABLE |  | Zyclipra has no AI/LLM features, prompts, retrieval or agents. |  |  |
-| 40 | AI tools bypassing user permissions | NOT APPLICABLE |  | Zyclipra has no AI/LLM features, prompts, retrieval or agents. |  |  |
+| 39 | Prompt injection | NOT APPLICABLE |  | Zyclipa has no AI/LLM features, prompts, retrieval or agents. |  |  |
+| 40 | AI tools bypassing user permissions | NOT APPLICABLE |  | Zyclipa has no AI/LLM features, prompts, retrieval or agents. |  |  |
 | 41 | Excess database privileges | NOT APPLICABLE |  | No database: data lives in local files on the owner's PC and in their own Google Drive. |  |  |
 | 42 | Missing audit logs | PASS |  | Fixed: dashboard password/website sign-ins, failed attempts and lock-outs are logged (address, session hash). |  | AuthAlertTest; live log lines observed |
 | 43 | No security monitoring or alerts | PASS |  | Fixed: lock-outs (per address or global) raise an in-app alert telling the owner to change the password. |  | AuthAlertTest (one alert per lock-out) |
@@ -178,15 +178,15 @@ No audit can guarantee immunity from attacks or legal claims.
 | 56 | Account enumeration | PASS |  | One message for wrong username or password; dummy hash keeps timing equal. |  | DashboardAuth.login |
 | 57 | Business-logic abuse | PASS |  | Limits enforced on the PC: gain ≤ 300 %, replay 15–300 s, sound rate limit, idempotent commands. |  | CommandsTest; SoundboardGainTest |
 | 58 | Race conditions | PASS |  | Command dedupe is synchronized; settings writes atomic; recording start/stop idempotent. |  | CommandsTest |
-| 59 | Webhook replay / duplicate processing | NOT APPLICABLE |  | Zyclipra is free: no payments, purchases, subscriptions or webhooks. (Command replay is covered by command ids, see 58.) |  |  |
+| 59 | Webhook replay / duplicate processing | NOT APPLICABLE |  | Zyclipa is free: no payments, purchases, subscriptions or webhooks. (Command replay is covered by command ids, see 58.) |  |  |
 | 60 | Overpowered CI/CD credentials | PASS |  | App CI: contents: read. Website: contents read, pages write, id-token write (required for Pages); no stored secrets. |  | workflow review |
 | 61 | Untrusted build actions or scripts | PASS |  | Only official actions/* actions; no third-party actions or install scripts. |  | workflow review |
 | 62 | Unpinned build dependencies | PASS |  | Fixed: all GitHub Actions pinned to full commit SHAs; Maven dependencies use exact versions. |  | workflow files after change |
 | 63 | Security checks fail open | PASS |  | Connections denied unless allowed; missing auth → 401; errors → error codes; website features off unless the key hash exists. |  | RemoteTest; webtest.py |
 | 64 | Missing resource limits | PASS |  | Request body limit, flood guard, sound rate limit, WebRTC 64 KB messages, 4 peers, 64 in-flight requests per connection (added), 36 KB clip parts. |  | RtcRouteTest; code review |
-| 65 | AI sensitive-information disclosure | NOT APPLICABLE |  | Zyclipra has no AI/LLM features, prompts, retrieval or agents. |  |  |
-| 66 | Unsafe use of AI output | NOT APPLICABLE |  | Zyclipra has no AI/LLM features, prompts, retrieval or agents. |  |  |
-| 67 | AI agents have excessive agency | NOT APPLICABLE |  | Zyclipra has no AI/LLM features, prompts, retrieval or agents. |  |  |
+| 65 | AI sensitive-information disclosure | NOT APPLICABLE |  | Zyclipa has no AI/LLM features, prompts, retrieval or agents. |  |  |
+| 66 | Unsafe use of AI output | NOT APPLICABLE |  | Zyclipa has no AI/LLM features, prompts, retrieval or agents. |  |  |
+| 67 | AI agents have excessive agency | NOT APPLICABLE |  | Zyclipa has no AI/LLM features, prompts, retrieval or agents. |  |  |
 | 68 | Sensitive browser storage | PASS |  | Nothing sensitive persisted: tokens in memory only; one sessionStorage flag; no localStorage/IndexedDB. |  | grep localStorage/indexedDB |
 | 69 | Open redirects | PASS |  | No redirect parameters anywhere; OAuth redirect is a fixed loopback URL. |  | route review |
 | 70 | Unsecured GraphQL / WebSocket / realtime endpoints | PASS |  | WebRTC: offer must carry the link key and be < 2 min old; DTLS fingerprints exchanged via the owner's Drive; every message authorized by RtcBridge.route; size and in-flight caps. |  | RtcRouteTest; Chromium interop test |

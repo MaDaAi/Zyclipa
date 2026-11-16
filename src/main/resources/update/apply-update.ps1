@@ -1,4 +1,4 @@
-# Zyclipra update step: waits for Zyclipra to close, swaps in the new version, starts it.
+# Zyclipa update step: waits for Zyclipa to close, swaps in the new version, starts it.
 # Started by the app after the download was verified (signature, size, SHA-256). The old version is kept as *.previous.
 param([int]$WaitPid, [string]$Src, [string]$Dst, [string]$Staging)
 $ErrorActionPreference = 'Stop'
@@ -10,9 +10,9 @@ Rename-Item -LiteralPath $Dst -NewName (Split-Path -Leaf $prev)
 try {
     Move-Item -LiteralPath $Src -Destination $Dst
 } catch {
-    # Put the old version back so Zyclipra still starts.
+    # Put the old version back so Zyclipa still starts.
     Rename-Item -LiteralPath $prev -NewName (Split-Path -Leaf $Dst)
     throw
 }
 if ($Staging -and (Test-Path -LiteralPath $Staging)) { Remove-Item -LiteralPath $Staging -Recurse -Force -ErrorAction SilentlyContinue }
-Start-Process -FilePath (Join-Path $Dst 'Zyclipra.exe')
+Start-Process -FilePath (Join-Path $Dst 'Zyclipa.exe')

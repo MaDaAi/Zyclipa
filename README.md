@@ -1,4 +1,4 @@
-# Zyclipra
+# Zyclipa
 
 **Free, MIT-licensed gaming utility for Windows**: screen and game recording, instant
 replay, a clip library, a multi-channel audio mixer with per-app control, a 9-band equalizer,
@@ -15,14 +15,14 @@ behind interfaces so Linux and macOS back-ends can be added.
 ## Install and run
 
 ### Option A – portable app (recommended for players)
-1. Download or build the `Zyclipra` folder (see *Build* below: `packaging/build-installer.ps1`).
+1. Download or build the `Zyclipa` folder (see *Build* below: `packaging/build-installer.ps1`).
 2. Install FFmpeg (needed for recording, replays, thumbnails and MP3 import) – see *FFmpeg* below.
-3. Double-click `Zyclipra.exe`.
+3. Double-click `Zyclipa.exe`.
 
 ### Option B – run the jar
 Requires Java 21 or newer.
 ```
-java --enable-native-access=ALL-UNNAMED -jar target/zyclipra.jar
+java --enable-native-access=ALL-UNNAMED -jar target/zyclipa.jar
 ```
 
 Command-line options:
@@ -31,7 +31,7 @@ Command-line options:
 |---|---|
 | `--minimized` | start minimised |
 | `--page clips` | open on a section (home, clips, mixer, soundboard, settings) |
-| `--data-dir <folder>` | keep settings somewhere else (default `%APPDATA%\Zyclipra`) |
+| `--data-dir <folder>` | keep settings somewhere else (default `%APPDATA%\Zyclipa`) |
 | `--screenshot <file.png>` | render the window off-screen, save a PNG and exit (used by build checks) |
 | `--self-test <file.json>` | record, save a replay, take a screenshot, play a sound and check the UI, then write results and exit. Uses a temporary folder and never changes your Windows volumes |
 
@@ -42,7 +42,7 @@ Maven 3.9.9 into the project's `.tools` folder and keep dependencies in `.m2/` i
 Node.js is only needed if you change the dashboard's TypeScript.
 
 ```
-mvnw.cmd package               # (or: mvn package) compiles, runs all tests, writes target/zyclipra.jar
+mvnw.cmd package               # (or: mvn package) compiles, runs all tests, writes target/zyclipa.jar
 cd src/main/web && npx -p typescript@5.6.3 tsc -p tsconfig.json   # only after editing app.ts
 powershell -File packaging/build-installer.ps1 -Type app-image     # portable folder in dist/
 powershell -File packaging/build-installer.ps1 -Type msi           # installer (needs WiX 3 on PATH)
@@ -57,24 +57,24 @@ self-test on Windows and produces the MSI. Nothing is published automatically.
 ## Optional native dependencies
 
 ### FFmpeg (recording)
-Zyclipra uses FFmpeg as an external program for screen capture (`gdigrab`), encoding
+Zyclipa uses FFmpeg as an external program for screen capture (`gdigrab`), encoding
 (NVIDIA NVENC, Intel QuickSync, AMD AMF or x264), replay joining, trimming and thumbnails.
-It looks for it in: Settings → Recording → FFmpeg, the `ZYCLIPRA_FFMPEG` variable, an `ffmpeg`
+It looks for it in: Settings → Recording → FFmpeg, the `ZYCLIPA_FFMPEG` variable, an `ffmpeg`
 folder next to the app, then your `PATH`.
 
 Get a free Windows build from https://www.gyan.dev/ffmpeg/builds/ (the "essentials" build is
-enough) or `winget install Gyan.FFmpeg`. FFmpeg builds with x264 are GPL-licensed; Zyclipra
-only runs it as a separate program, so Zyclipra itself stays MIT.
+enough) or `winget install Gyan.FFmpeg`. FFmpeg builds with x264 are GPL-licensed; Zyclipa
+only runs it as a separate program, so Zyclipa itself stays MIT.
 
 Without FFmpeg everything else (mixer, EQ, mic effects, soundboard with WAV files, dashboard) works.
 
 ### Virtual audio cable (sending soundboard / processed mic into voice chat)
 Windows has no built-in way for an app to create a microphone. To let Discord or a game hear
-your soundboard or your processed voice, install a virtual audio cable and pick it in Zyclipra
+your soundboard or your processed voice, install a virtual audio cable and pick it in Zyclipa
 (Soundboard → "Also send to", Mixer → "Send processed voice to"); then choose the cable's
 output as the microphone in the chat app.
 
-Free options (Zyclipra never installs drivers itself; installing one needs administrator rights
+Free options (Zyclipa never installs drivers itself; installing one needs administrator rights
 and a reboot, and you should only install drivers you trust):
 - **VB-CABLE** (free donationware, closed source) – https://vb-audio.com/Cable/
 - **Virtual Audio Driver by VirtualDrivers** (open source, MIT) – https://github.com/VirtualDrivers/Virtual-Audio-Driver
@@ -91,24 +91,24 @@ and a reboot, and you should only install drivers you trust):
 | Clips | thumbnails, preview, search, filter, sort, folders, favourites, rename, delete (Recycle Bin), export, lossless trim, file/size/resolution/codec/tracks info | JavaFX media player, ffprobe, FFmpeg stream copy |
 | Mixer | Game/Chat/Media/Aux/Mic/Master channels, per-app volume & mute, assign apps to channels, live meters, profiles, follows device changes | Windows Core Audio (WASAPI) through JNA: audio sessions, endpoint volume, peak meters |
 | Equalizer | 9-band parametric (frequency, gain, Q), presets, live curve, on/off | biquad filters (RBJ cookbook) |
-| Microphone | gain, noise gate, compressor, limiter, noise suppression, monitoring, routing to a virtual cable | Java Sound capture + Zyclipra's own DSP (no paid libraries) |
+| Microphone | gain, noise gate, compressor, limiter, noise suppression, monitoring, routing to a virtual cable | Java Sound capture + Zyclipa's own DSP (no paid libraries) |
 | Soundboard | import MP3/WAV/OGG/FLAC/M4A…, collections, rename, volume, loop, stop/replay, global shortcuts, two outputs at once | files converted once to 48 kHz WAV and played from memory |
-| Google Drive | optional; automatic or manual upload into Zyclipra/Clips, Recordings, Screenshots; queue with states, progress, retry, cancel; download back; delete cloud copy; disconnect revokes the token | OAuth 2.0 + PKCE in the system browser, `drive.file` scope, resumable uploads verified by MD5, persistent queue, token in Windows Credential Manager |
+| Google Drive | optional; automatic or manual upload into Zyclipa/Clips, Recordings, Screenshots; queue with states, progress, retry, cancel; download back; delete cloud copy; disconnect revokes the token | OAuth 2.0 + PKCE in the system browser, `drive.file` scope, resumable uploads verified by MD5, persistent queue, token in Windows Credential Manager |
 | Dashboard | clips page (play, download, upload to Drive), Clip it / record / screenshot, Google Drive status and preferences, account and sessions, mixer and soundboard | HTTPS with a certificate made on your PC, username + Argon2id password, session cookies, rate limiting, CSRF protection; this PC by default, home network / Tailscale by choice |
 
 ## Google Drive (optional)
-Back up clips, recordings and screenshots to *My Drive › Zyclipra*, automatically or one at a time.
+Back up clips, recordings and screenshots to *My Drive › Zyclipa*, automatically or one at a time.
 Your PC stays the main library; nothing is removed from it unless you choose that.
 
 1. *Settings › Cloud & Sync* › **Sign in with Google**, choose your account, allow access.
 2. Turn on **Automatic upload**, or upload single clips from the clip menu, the editor or the dashboard.
 
-Sign-in is Google's own OAuth 2.0 + PKCE in your browser, with the `drive.file` scope (Zyclipra
+Sign-in is Google's own OAuth 2.0 + PKCE in your browser, with the `drive.file` scope (Zyclipa
 only sees files it made). The token is kept in Windows Credential Manager. Uploads resume after
 interruptions, are checked against the local file's checksum, and never create duplicates.
 
 ## Dashboard and hosting (optional)
-A web page served by Zyclipra on your PC: clip, record, browse/download clips, Google Drive status,
+A web page served by Zyclipa on your PC: clip, record, browse/download clips, Google Drive status,
 mixer and soundboard – from your phone or another PC.
 
 1. *Settings › Hosting*: create a dashboard **username and password** (there's no default account).
@@ -121,14 +121,14 @@ not recommended. Details, security notes and troubleshooting:
 [docs/cloud-and-hosting.md](docs/cloud-and-hosting.md).
 
 ## Privacy and security
-- No telemetry, no accounts, no background uploads. Data folder: `%APPDATA%\Zyclipra`, logs in `logs\`.
-- No administrator rights needed. No drivers installed. No keyboard hooks: global shortcuts use `RegisterHotKey`, so Zyclipra never sees other keystrokes.
+- No telemetry, no accounts, no background uploads. Data folder: `%APPDATA%\Zyclipa`, logs in `logs\`.
+- No administrator rights needed. No drivers installed. No keyboard hooks: global shortcuts use `RegisterHotKey`, so Zyclipa never sees other keystrokes.
 - Microphone is only opened when you turn on voice effects. Screen capture only runs while recording or while instant replay is on, and the header always shows it.
 - Settings files are written atomically; a damaged settings file is set aside and defaults are used.
 
 ## Known limitations (honest list)
 See `PROGRESS.md` for the full, current list. The main ones:
-- The EQ and mic effects shape the audio Zyclipra produces (your processed mic and the soundboard). Changing other apps' sound itself (e.g. EQ on a game) needs an audio driver (APO), which Zyclipra does not install.
+- The EQ and mic effects shape the audio Zyclipa produces (your processed mic and the soundboard). Changing other apps' sound itself (e.g. EQ on a game) needs an audio driver (APO), which Zyclipa does not install.
 - Capturing game/desktop **sound** in recordings needs a capture device that carries it ("Stereo Mix", or a virtual cable the game outputs to). Direct WASAPI loopback capture is planned.
 - `gdigrab` captures the desktop; exclusive full-screen games may show black – use borderless windowed mode.
 - Dashboard sign-in is a username and password you create in the app; signing in to the dashboard with a Google account isn't offered (Google only allows localhost or public domains as sign-in targets).
@@ -136,7 +136,7 @@ See `PROGRESS.md` for the full, current list. The main ones:
 
 ## Project layout
 ```
-src/main/java/io/zyclipra/
+src/main/java/io/zyclipa/
   app/        start-up, wiring, command-line checks
   core/       settings, paths, logging, event bus
   platform/   OS facts (displays, windows, foreground app)
@@ -155,4 +155,4 @@ src/test/java/      automated tests
 ```
 
 ## Licence
-MIT – see `LICENSE`. Zyclipra is an independent project and is not affiliated with any hardware or software vendor.
+MIT – see `LICENSE`. Zyclipa is an independent project and is not affiliated with any hardware or software vendor.

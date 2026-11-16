@@ -1,5 +1,5 @@
 #!/bin/sh
-# Zyclipra Maven launcher: uses (and if needed downloads) Maven 3.9.9 inside this project's
+# Zyclipa Maven launcher: uses (and if needed downloads) Maven 3.9.9 inside this project's
 # .tools folder, so nothing has to be installed system-wide.
 set -e
 BASEDIR=$(cd "$(dirname "$0")" && pwd)

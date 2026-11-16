@@ -11,18 +11,18 @@ import java.util.Base64;
 import java.util.HexFormat;
 
 /**
- * Release signing for Zyclipra's updater (run with the JDK: java packaging/SignRelease.java ...).
+ * Release signing for Zyclipa's updater (run with the JDK: java packaging/SignRelease.java ...).
  *
  *   pack <dir> <zip>                zip the app folder (forward-slash paths)
  *   genkey                          make private/update-signing-key.txt (keep it secret, back it up) and print the public key
- *   sign <zip> <version> [notes]    write zyclipra-update.json next to the zip, signed with that key
+ *   sign <zip> <version> [notes]    write zyclipa-update.json next to the zip, signed with that key
  *
  * The app only installs an update whose manifest is signed by this key, whose download comes from the expected
  * GitHub releases URL, and whose SHA-256 and size match – so a compromised GitHub account alone can't ship malware.
  */
 public class SignRelease {
     static final Path KEY = Path.of("private", "update-signing-key.txt");
-    static final String BASE = "https://github.com/MaDaAi/zyclipra-dashboard/releases/download/";
+    static final String BASE = "https://github.com/MaDaAi/zyclipa-dashboard/releases/download/";
 
     public static void main(String[] a) throws Exception {
         if (a.length >= 1 && a[0].equals("genkey")) {
@@ -35,7 +35,7 @@ public class SignRelease {
             return;
         }
         if (a.length == 3 && a[0].equals("pack")) {
-            // Standard zip (forward slashes), Zyclipra/... at the top, like the updater expects.
+            // Standard zip (forward slashes), Zyclipa/... at the top, like the updater expects.
             Path dir = Path.of(a[1]), zip = Path.of(a[2]);
             try (var z = new java.util.zip.ZipOutputStream(Files.newOutputStream(zip)); var files = Files.walk(dir)) {
                 for (Path f : files.filter(Files::isRegularFile).sorted().toList()) {
@@ -59,7 +59,7 @@ public class SignRelease {
         byte[] data = Files.readAllBytes(zip);
         String sha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(data));
         String url = BASE + "v" + version + "/" + zip.getFileName();
-        String canonical = "zyclipra-update|v1|" + version + "|" + url + "|" + sha + "|" + data.length;
+        String canonical = "zyclipa-update|v1|" + version + "|" + url + "|" + sha + "|" + data.length;
         PrivateKey key = KeyFactory.getInstance("Ed25519")
                 .generatePrivate(new PKCS8EncodedKeySpec(Base64.getDecoder().decode(Files.readString(KEY).trim())));
         Signature s = Signature.getInstance("Ed25519");
@@ -68,9 +68,9 @@ public class SignRelease {
         String sig = Base64.getEncoder().encodeToString(s.sign());
         String json = "{\n  \"version\": \"" + version + "\",\n  \"url\": \"" + url + "\",\n  \"sha256\": \"" + sha + "\",\n  \"size\": " + data.length
                 + ",\n  \"notes\": \"" + notes.replace("\\", "\\\\").replace("\"", "\\\"") + "\",\n  \"signature\": \"" + sig + "\"\n}\n";
-        Path out = zip.resolveSibling("zyclipra-update.json");
+        Path out = zip.resolveSibling("zyclipa-update.json");
         Files.writeString(out, json);
         System.out.println("Wrote " + out + "\nUpload BOTH files to a GitHub release tagged v" + version
-                + " in MaDaAi/zyclipra-dashboard:\n  " + zip.getFileName() + "\n  zyclipra-update.json");
+                + " in MaDaAi/zyclipa-dashboard:\n  " + zip.getFileName() + "\n  zyclipa-update.json");
     }
 }

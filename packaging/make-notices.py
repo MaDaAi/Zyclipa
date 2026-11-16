@@ -1,4 +1,4 @@
-"""Builds packaging/THIRD-PARTY-NOTICES.txt: the licences of everything bundled in the Zyclipra exe.
+"""Builds packaging/THIRD-PARTY-NOTICES.txt: the licences of everything bundled in the Zyclipa exe.
 
 Run after changing dependencies:  python packaging/make-notices.py
 It reads the licence files shipped inside the dependency jars (project-local .m2) and adds the full texts of
@@ -11,7 +11,7 @@ M2 = ROOT / '.m2' / 'repository'
 OUT = ROOT / 'packaging' / 'THIRD-PARTY-NOTICES.txt'
 
 COMPONENTS = [
-    ('Java runtime (OpenJDK)', 'GPLv2 with the Classpath Exception', 'see the runtime\\legal folder next to Zyclipra.exe'),
+    ('Java runtime (OpenJDK)', 'GPLv2 with the Classpath Exception', 'see the runtime\\legal folder next to Zyclipa.exe'),
     ('OpenJFX (JavaFX) 23.0.2', 'GPLv2 with the Classpath Exception', 'full text below'),
     ('Gson 2.15.0 (Google)', 'Apache License 2.0', 'full text below'),
     ('Bouncy Castle 1.86', 'Bouncy Castle Licence (MIT-style)', 'text below'),
@@ -31,11 +31,11 @@ def jar_text(rel, inner):
 def fetch(url):
     return urllib.request.urlopen(url, timeout=30).read().decode('utf-8', 'replace')
 
-parts = ['Zyclipra – third-party notices', '=' * 30, '',
-         'Zyclipra itself is licensed under the MIT License (LICENSE.txt). It bundles these components:', '']
+parts = ['Zyclipa – third-party notices', '=' * 30, '',
+         'Zyclipa itself is licensed under the MIT License (LICENSE.txt). It bundles these components:', '']
 for name, lic, where in COMPONENTS:
     parts.append(f'- {name}: {lic} ({where})')
-parts.append('\nFFmpeg is not bundled; Zyclipra uses a copy you install yourself, under its own licence.\n')
+parts.append('\nFFmpeg is not bundled; Zyclipa uses a copy you install yourself, under its own licence.\n')
 
 def section(title, text):
     parts.extend(['', '-' * 78, title, '-' * 78, text.strip(), ''])

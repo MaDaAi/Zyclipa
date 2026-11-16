@@ -1,6 +1,6 @@
-# Zyclipra – values that shape how it behaves
+# Zyclipa – values that shape how it behaves
 
-Zyclipra is a utility, not a game, so this sheet lists the numbers that decide how recording,
+Zyclipa is a utility, not a game, so this sheet lists the numbers that decide how recording,
 audio, the soundboard and the remote dashboard behave. The same values live in
 `mechanics.json`. "Estimated" means a sensible default chosen by us (clean room: nothing of the
 original program was opened, so none of its values were copied). Everything marked estimated
@@ -11,8 +11,8 @@ can be changed in Settings unless noted.
 |---|---|---|
 | Replay length range | 15 – 300 s | person's request |
 | Replay default | 60 s (1 minute) | reference picture 12 |
-| Replay segment length | 2 s (ring of MPEG-TS files on disk, not RAM) | Zyclipra design |
-| Keyframe interval | 2 s (fps × 2) – trims snap to it | Zyclipra design |
+| Replay segment length | 2 s (ring of MPEG-TS files on disk, not RAM) | Zyclipa design |
+| Keyframe interval | 2 s (fps × 2) – trims snap to it | Zyclipa design |
 | Frame rate | 30 fps default, 10–144 | default from reference picture 12 |
 | Resolution / quality defaults | 1080p, High (20 000 kbps) | reference picture 12 (bitrate for "High" estimated) |
 | Video bitrate | Low 6 000 / Medium 12 000 / High 20 000 / Very high 40 000 kbps | estimated |
@@ -41,7 +41,7 @@ program is reported instead of silently failing.
 |---|---|---|
 | Channels | Game, Chat, Media, Aux, Microphone, Master | person's request |
 | App → channel | Chat: Discord, TeamSpeak, Mumble, Teams…; Media: browsers, Spotify, VLC…; System sounds: Aux; others: Game | estimated |
-| Per-app volume | channel volume × app volume, applied to the Windows audio session | Zyclipra design |
+| Per-app volume | channel volume × app volume, applied to the Windows audio session | Zyclipa design |
 | EQ | 9 bands, low shelf + 7 peaks + high shelf at 32, 64, 125, 250, 500, 1k, 2k, 4k, 8k Hz; ±12 dB; Q 0.1–10 | count from request, rest estimated |
 | EQ presets | Flat, Bass boost, Footsteps, Voice clarity, Treble boost, Warm + your own | estimated |
 | Processing rate / block | 48 kHz, 10 ms | estimated |
