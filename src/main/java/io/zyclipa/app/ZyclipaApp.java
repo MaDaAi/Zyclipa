@@ -67,6 +67,18 @@ public final class ZyclipaApp extends Application {
             ctx.settings.recording.recordChatAudio = false;
         }
         io.zyclipa.ui.Theme.init(ctx.settings.general.theme);
+        if (CliOptions.screenshot() != null && "tray".equals(CliOptions.page())) {
+            // Check mode: render the tray menu and save it.
+            javafx.scene.Scene sc = new javafx.scene.Scene(io.zyclipa.ui.Tray.preview(ctx));
+            sc.getStylesheets().add(ZyclipaApp.class.getResource("/ui/zyclipa.css").toExternalForm());
+            stage.setScene(sc);
+            Path out = CliOptions.screenshot();
+            new Thread(() -> {
+                try { Thread.sleep(600); Checks.save(Checks.onFx(() -> sc.snapshot(null)), out); } catch (Exception e) { e.printStackTrace(); }
+                Runtime.getRuntime().halt(0);
+            }).start();
+            return;
+        }
         MainWindow win = new MainWindow(ctx);
         if (CliOptions.page() != null) {
             String[] pg = CliOptions.page().split(":");

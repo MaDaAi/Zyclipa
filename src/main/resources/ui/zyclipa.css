@@ -381,6 +381,20 @@
 .export-choice:hover { -fx-border-color: -muted; }
 .export-choice:selected { -fx-border-color: -accent; -fx-border-width: 2; -fx-padding: 9 13; }
 
+/* ---------- tray menu (right-click on the icon by the clock) ---------- */
+.tray-menu { -fx-background-color: -card; -fx-background-radius: 10; -fx-border-color: -line; -fx-border-radius: 10; -fx-padding: 6;
+             -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.35), 14, 0.15, 0, 3); }
+.tray-head { -fx-padding: 8 10 10 10; }
+.tray-title { -fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill: -text; }
+.tray-state { -fx-font-size: 12px; -fx-text-fill: -muted; }
+.tray-state-on { -fx-font-size: 12px; -fx-text-fill: -ok; }
+.tray-sep { -fx-min-height: 1; -fx-max-height: 1; -fx-background-color: -line; }
+.tray-item { -fx-background-color: transparent; -fx-background-radius: 6; -fx-padding: 8 10; -fx-text-fill: -text; -fx-font-size: 13.5px; -fx-cursor: hand; }
+.tray-item .label { -fx-text-fill: -text; }
+.tray-item:hover, .tray-item:focused { -fx-background-color: -well; }
+.tray-item:disabled { -fx-opacity: 0.45; }
+.tray-hint { -fx-font-size: 11.5px; -fx-text-fill: -muted; }
+
 /* ---------- light theme (generated) ---------- */
 .root.light {
     -bg: #F3F4F7;
