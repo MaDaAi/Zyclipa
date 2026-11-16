@@ -85,7 +85,7 @@ public final class ReplayBuffer {
                 args.addAll(CaptureArgs.mapping(r, tracks));
                 trackTitles = new ArrayList<>();
                 for (AudioTracks.Track t : tracks) trackTitles.add(t.title());
-                for (String d : r.audioInputs) trackTitles.add(CaptureArgs.trackName(d));
+                for (String d : CaptureArgs.audioDevices(r)) trackTitles.add(CaptureArgs.trackName(d));
                 args.addAll(CaptureArgs.encode(r, engine.encoder()));
                 args.addAll(List.of("-f", "segment", "-segment_time", String.valueOf(SEGMENT_SEC), "-segment_format", "mpegts",
                         "-segment_wrap", String.valueOf(wrap), "-reset_timestamps", "1",

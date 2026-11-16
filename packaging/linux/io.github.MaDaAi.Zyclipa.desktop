@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Zyclipa
+GenericName=Game clipping and soundboard
+Comment=Instant replay, recording, clip editing and a soundboard
+Exec=zyclipa
+Icon=io.github.MaDaAi.Zyclipa
+Terminal=false
+Categories=AudioVideo;Video;Recorder;Game;
+Keywords=clip;replay;record;soundboard;screenshot;

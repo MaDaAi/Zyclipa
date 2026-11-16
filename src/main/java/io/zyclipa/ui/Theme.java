@@ -19,6 +19,7 @@ public final class Theme {
     public static boolean resolve(String setting) {
         if ("light".equals(setting)) return true;
         if ("dark".equals(setting)) return false;
+        if (io.zyclipa.core.Platform.isLinux()) return linuxPrefersLight();
         try {
             return com.sun.jna.platform.win32.Advapi32Util.registryGetIntValue(com.sun.jna.platform.win32.WinReg.HKEY_CURRENT_USER,
                     "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "AppsUseLightTheme") == 1;
@@ -29,6 +30,19 @@ public final class Theme {
 
     /** Sets the theme before any window is built, so drawn colours start out right. */
     public static void init(String setting) { light = resolve(setting); }
+
+    static boolean linuxPrefersLight() {
+        String gtk = System.getenv("GTK_THEME");
+        if (gtk != null && !gtk.isBlank()) return !gtk.toLowerCase(java.util.Locale.ROOT).contains("dark");
+        try {
+            Process p = new ProcessBuilder("gsettings", "get", "org.gnome.desktop.interface", "color-scheme").redirectErrorStream(true).start();
+            String out = new String(p.getInputStream().readAllBytes()).trim();
+            p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
+            return out.contains("prefer-light");
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     /** Applies the theme to a window's root (and remembers it for drawn colours). */
     public static void apply(Parent root, String setting) {

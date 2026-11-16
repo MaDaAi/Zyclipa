@@ -1,0 +1,3 @@
+#!/bin/sh
+# Starts Zyclipa inside the Flatpak (Java runtime in /app/jre, FFmpeg in /app/bin).
+exec /app/jre/bin/java --enable-native-access=ALL-UNNAMED -Xmx384m -jar /app/share/zyclipa/zyclipa.jar "$@"

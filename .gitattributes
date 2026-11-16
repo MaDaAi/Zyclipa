@@ -5,3 +5,8 @@ mvnw text eol=lf
 *.ps1 text eol=crlf
 *.png binary
 *.ico binary
+packaging/linux/zyclipa text eol=lf
+*.sh text eol=lf
+packaging/linux/*.desktop text eol=lf
+packaging/linux/*.xml text eol=lf
+packaging/linux/*.json text eol=lf

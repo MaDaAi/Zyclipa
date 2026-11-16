@@ -26,6 +26,8 @@ public final class AppPaths {
         String appData = System.getenv("APPDATA");
         if (Platform.isWindows() && appData != null) return migrated(Path.of(appData, "Zyclipra"), Path.of(appData, "Zyclipa"));
         if (Platform.isMac()) return Path.of(System.getProperty("user.home"), "Library", "Application Support", "Zyclipa");
+        String xdg = System.getenv("XDG_CONFIG_HOME");
+        if (xdg != null && !xdg.isBlank()) return Path.of(xdg, "zyclipa");
         return Path.of(System.getProperty("user.home"), ".config", "zyclipa");
     }
 

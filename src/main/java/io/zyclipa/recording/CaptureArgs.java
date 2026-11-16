@@ -34,7 +34,7 @@ public final class CaptureArgs {
         } else if (Platform.isLinux()) {
             a.addAll(List.of("-f", "x11grab", "-framerate", String.valueOf(r.fps),
                     "-video_size", display.width() + "x" + display.height(), "-i", ":0.0+" + display.x() + "," + display.y()));
-            for (String dev : r.audioInputs) a.addAll(List.of("-f", "pulse", "-i", dev));
+            for (String dev : audioDevices(r)) a.addAll(List.of("-f", "pulse", "-thread_queue_size", "1024", "-i", dev));
         } else {
             a.addAll(List.of("-f", "avfoundation", "-framerate", String.valueOf(r.fps), "-i", display.index() + ":none"));
         }
@@ -66,7 +66,7 @@ public final class CaptureArgs {
         List<String> a = new ArrayList<>();
         List<String> names = new ArrayList<>();
         for (AudioTracks.Track t : tracks) names.add(t.title());
-        for (String d : r.audioInputs) names.add(trackName(d));
+        for (String d : audioDevices(r)) names.add(trackName(d));
         int n = names.size();
         a.addAll(List.of("-map", "0:v"));
         if (n == 0) return a;
@@ -84,8 +84,24 @@ public final class CaptureArgs {
         return a;
     }
 
+    /** PulseAudio / PipeWire names for "what the PC plays" and "the default microphone". */
+    public static final String LINUX_DESKTOP_AUDIO = "@DEFAULT_MONITOR@", LINUX_MIC = "@DEFAULT_SOURCE@";
+
+    /**
+     * The extra audio devices to record. On Linux, when none are chosen, that's the PC's sound and (when microphone
+     * recording is on) the default microphone, each on its own track. Windows records its tracks natively instead.
+     */
+    public static List<String> audioDevices(Settings.Recording r) {
+        if (!Platform.isLinux() || !r.audioInputs.isEmpty()) return r.audioInputs;
+        List<String> d = new ArrayList<>(List.of(LINUX_DESKTOP_AUDIO));
+        if (r.recordMic) d.add(LINUX_MIC);
+        return d;
+    }
+
     /** "Microphone (Realtek(R) Audio)" -> "Microphone"; keeps names short for track labels. */
-    static String trackName(String device) {
+    public static String trackName(String device) {
+        if (LINUX_DESKTOP_AUDIO.equals(device)) return "Game audio";
+        if (LINUX_MIC.equals(device)) return "Microphone";
         String d = device.replaceAll("[\r\n=]", " ").trim();
         int p = d.indexOf(" (");
         return p > 0 ? d.substring(0, p) : d;

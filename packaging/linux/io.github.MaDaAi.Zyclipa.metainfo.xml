@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.MaDaAi.Zyclipa</id>
+  <name>Zyclipa</name>
+  <summary>Instant replay, recording, clip editing and a soundboard</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <developer id="io.github.madaai">
+    <name>MaDaAi</name>
+  </developer>
+  <description>
+    <p>Zyclipa keeps the last moments of your game ready to save as a clip, records your screen, and edits and exports
+      clips (including under 10 MB for Discord). It has a soundboard with up to 300% volume and a phone dashboard.</p>
+    <p>On Linux, recording uses X11 screen capture and PulseAudio/PipeWire sound. Per-app volume mixing and global
+      shortcuts are Windows-only for now.</p>
+  </description>
+  <launchable type="desktop-id">io.github.MaDaAi.Zyclipa.desktop</launchable>
+  <url type="homepage">https://github.com/MaDaAi/Zyclipa</url>
+  <url type="bugtracker">https://github.com/MaDaAi/Zyclipa/issues</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <!-- Newest first; the version must match pom.xml (checked by VersionSyncTest). -->
+    <release version="0.1.0" date="2026-11-16">
+      <description>
+        <p>First release of Zyclipa.</p>
+      </description>
+    </release>
+  </releases>
+</component>

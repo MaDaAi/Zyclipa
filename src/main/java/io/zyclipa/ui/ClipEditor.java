@@ -1034,10 +1034,10 @@ final class ClipEditor {
             win.toast("Exporting " + kind.title.toLowerCase() + "…", false);
             CompletableFuture.runAsync(() -> {
                 try {
-                    ctx.library.render(clip, e, kind, f.toPath(), ctx.capture.encoder());
-                    long size = java.nio.file.Files.size(f.toPath());
-                    Ui.fx(() -> win.toast("Exported " + f.getName() + " (" + Ui.bytes(size) + ")", false));
-                    Ui.fx(() -> reveal(f.toPath()));
+                    java.nio.file.Path made = ctx.library.render(clip, e, kind, f.toPath(), ctx.capture.encoder());
+                    long size = java.nio.file.Files.size(made);
+                    Ui.fx(() -> win.toast("Exported " + made.getFileName() + " (" + Ui.bytes(size) + ")", false));
+                    Ui.fx(() -> reveal(made));
                 } catch (Exception ex) {
                     Ui.fx(() -> win.toast("Export failed: " + ex.getMessage(), true));
                 }
@@ -1068,8 +1068,10 @@ final class ClipEditor {
     }
 
     private void reveal(Path f) {
-        try { new ProcessBuilder("explorer.exe", "/select," + f).start(); }
-        catch (Exception e) { win.toast("Couldn't open the folder: " + e.getMessage(), true); }
+        try {
+            if (io.zyclipa.core.Platform.isWindows()) new ProcessBuilder("explorer.exe", "/select," + f).start();
+            else new ProcessBuilder("xdg-open", f.getParent().toString()).start();   // Linux: open the folder
+        } catch (Exception e) { win.toast("Couldn't open the folder: " + e.getMessage(), true); }
     }
 
     @SuppressWarnings("unused")

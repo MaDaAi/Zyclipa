@@ -32,7 +32,8 @@
             <groupId>dev.onvoid.webrtc</groupId>
             <artifactId>webrtc-java</artifactId>
             <version>0.20.0</version>
-            <classifier>windows-x86_64</classifier>
+            <!-- The native part for the OS being built on (see the profiles below). -->
+            <classifier>${webrtc.native}</classifier>
         </dependency>
     <dependency><groupId>org.openjfx</groupId><artifactId>javafx-controls</artifactId><version>${javafx.version}</version></dependency>
     <dependency><groupId>org.openjfx</groupId><artifactId>javafx-media</artifactId><version>${javafx.version}</version></dependency>
@@ -42,6 +43,19 @@
     <dependency><groupId>org.bouncycastle</groupId><artifactId>bcpkix-jdk18on</artifactId><version>1.86</version></dependency>
     <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.11.3</version><scope>test</scope></dependency>
   </dependencies>
+
+  <profiles>
+    <profile>
+      <id>windows</id>
+      <activation><os><family>windows</family></os></activation>
+      <properties><webrtc.native>windows-x86_64</webrtc.native></properties>
+    </profile>
+    <profile>
+      <id>linux</id>
+      <activation><os><family>unix</family><name>Linux</name></os></activation>
+      <properties><webrtc.native>linux-x86_64</webrtc.native></properties>
+    </profile>
+  </profiles>
 
   <build>
     <resources>

@@ -332,15 +332,34 @@ public final class ClipLibrary {
 
     static final long DISCORD_LIMIT = 10L * 1024 * 1024;
 
-    /** Renders the clip with its edit (trim, 9:16, captions, track volumes mixed into one track) to {@code target}. */
-    public void render(Clip c, Clip.Edit e, Export kind, Path target, String encoder) throws IOException, InterruptedException {
-        if (kind == Export.ORIGINAL) { export(c, target); return; }
+    private final java.util.Map<String, Boolean> encoders = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Whether this FFmpeg has an encoder (e.g. libmp3lame isn't in every build). */
+    boolean hasEncoder(Ffmpeg ff, String name) {
+        return encoders.computeIfAbsent(name, n -> {
+            try { return ff.run(List.of("-hide_banner", "-encoders"), 30).output().contains(" " + n + " "); }
+            catch (Exception e) { return false; }
+        });
+    }
+
+    /**
+     * Renders the clip with its edit (trim, 9:16, captions, track volumes mixed into one track) to {@code target}.
+     * Returns the file written – an audio export becomes .m4a when this FFmpeg can't make MP3s.
+     */
+    public Path render(Clip c, Clip.Edit e, Export kind, Path target, String encoder) throws IOException, InterruptedException {
+        if (kind == Export.ORIGINAL) { export(c, target); return target; }
         Ffmpeg ff = ffmpeg.get().orElseThrow(() -> new IOException("Exporting needs FFmpeg."));
         Clip.Edit ed = e != null ? e : Clip.Edit.none(c);
         double len = Math.max(0.1, ed.out - ed.in);
         if (kind == Export.AUDIO) {
-            run(ff, audioArgs(c, ed, List.of("-c:a", "libmp3lame", "-b:a", "192k"), target), target, "Export");
-            return;
+            if (hasEncoder(ff, "libmp3lame")) {
+                run(ff, audioArgs(c, ed, List.of("-c:a", "libmp3lame", "-b:a", "192k"), target), target, "Export");
+                return target;
+            }
+            String n = target.getFileName().toString();
+            Path m4a = target.resolveSibling((n.contains(".") ? n.substring(0, n.lastIndexOf('.')) : n) + ".m4a");
+            run(ff, audioArgs(c, ed, List.of("-c:a", "aac", "-b:a", "192k"), m4a), m4a, "Export");
+            return m4a;
         }
         boolean visual = ed.vertical || (ed.texts != null && !ed.texts.isEmpty());
         long videoBps;
@@ -357,7 +376,7 @@ public final class ClipLibrary {
         for (int attempt = 0; attempt < 3; attempt++) {
             List<String> a = videoArgs(c, ed, kind, videoBps, maxHeight, visual, encoder, target);
             run(ff, a, target, "Export");
-            if (kind != Export.DISCORD || Files.size(target) <= DISCORD_LIMIT) return;
+            if (kind != Export.DISCORD || Files.size(target) <= DISCORD_LIMIT) return target;
             videoBps = (long) (videoBps * 0.8);   // came out too big: try again a bit smaller
         }
         throw new IOException("Couldn't get this clip under 10 MB – try trimming it shorter.");
