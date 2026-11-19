@@ -906,6 +906,32 @@ public final class SettingsView implements View {
             var rel = ctx.availableUpdate;
             var folder = io.zyclipa.update.Updater.installedFolder();
             if (rel == null) return;
+            if (io.zyclipa.update.FlatpakUpdater.inFlatpak()) {
+                // Linux: the Flatpak portal updates this installation from the signed Zyclipa repo (like MultiMini).
+                install.setDisable(true);
+                checkNow.setDisable(true);
+                upState.setText("Updating through Flatpak…");
+                new Thread(() -> {
+                    var r = io.zyclipa.update.FlatpakUpdater.update(p -> javafx.application.Platform.runLater(
+                            () -> upState.setText("Updating through Flatpak… " + p + " %")));
+                    javafx.application.Platform.runLater(() -> {
+                        checkNow.setDisable(false);
+                        if (r.state() == io.zyclipa.update.FlatpakUpdater.State.DONE) {
+                            upState.setText("Updated. Restart Zyclipa to use the new version.");
+                            install.setText("Restart to finish");
+                            install.setDisable(false);
+                            install.setOnAction(ev -> {
+                                try { io.zyclipa.update.FlatpakUpdater.restart(); javafx.application.Platform.exit(); }
+                                catch (Exception ex) { upState.setText("Couldn't restart – close and open Zyclipa yourself. (" + ex.getMessage() + ")"); }
+                            });
+                        } else {
+                            upState.setText(r.message());
+                            install.setDisable(false);
+                        }
+                    });
+                }, "flatpak-update").start();
+                return;
+            }
             if (folder.isEmpty()) {
                 DriveSyncBox.browse("https://github.com/" + io.zyclipa.update.Updater.REPO + "/releases/latest");
                 upState.setText("This copy isn't an installed Zyclipa.exe, so the download page was opened instead.");

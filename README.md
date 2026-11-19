@@ -20,7 +20,11 @@ behind interfaces so Linux and macOS back-ends can be added.
 3. Double-click `Zyclipa.exe`.
 
 ### Linux – Flatpak
-FFmpeg and Java are included. Download `Zyclipa-<version>-Linux-x86_64.flatpak`, then:
+FFmpeg and Java are included. Easiest, with automatic updates (in the app or your software centre):
+```
+flatpak install --user https://madaai.github.io/Zyclipa/zyclipa.flatpakref
+```
+Or download `Zyclipa-<version>-Linux-x86_64.flatpak` from Releases (it remembers the update source too), then:
 ```
 flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 flatpak install --user Zyclipa-<version>-Linux-x86_64.flatpak
@@ -28,7 +32,9 @@ flatpak run io.github.MaDaAi.Zyclipa
 ```
 Recording uses X11 screen capture and PulseAudio/PipeWire sound. Per-app volume mixing, global shortcuts and game
 detection are Windows-only for now. The Flatpak is built by `.github/workflows/build.yml` (job `flatpak`); its Google
-sign-in comes from the `GOOGLE_OAUTH_JSON` repository secret.
+sign-in comes from the `GOOGLE_OAUTH_JSON` repository secret. Publishing a release runs
+`.github/workflows/publish-linux-repo.yml`, which signs the Flatpak repository (secret `FLATPAK_GPG_PRIVATE_KEY`, public key
+`packaging/linux/zyclipa-repo.gpg`) and serves it on GitHub Pages for in-app updates (`FlatpakUpdater`, via the Flatpak portal).
 
 ### Run the jar
 Requires Java 21 or newer.

@@ -10,3 +10,5 @@ packaging/linux/zyclipa text eol=lf
 packaging/linux/*.desktop text eol=lf
 packaging/linux/*.xml text eol=lf
 packaging/linux/*.json text eol=lf
+scripts/*.sh text eol=lf
+*.gpg binary

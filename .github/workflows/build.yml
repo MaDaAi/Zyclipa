@@ -80,25 +80,16 @@ jobs:
           fi
       - name: Build the Linux jar
         run: mvn -B -DskipTests package
-      - name: Stage the app files
-        run: |
-          V=$(python3 -c "import re;print(re.search(r'<artifactId>zyclipa</artifactId>\s*<version>([^<]+)<',open('pom.xml').read()).group(1))")
-          echo "V=$V" >> "$GITHUB_ENV"
-          mkdir -p build/linux-source
-          cp target/zyclipa.jar packaging/linux/zyclipa packaging/linux/io.github.MaDaAi.Zyclipa.desktop \
-             packaging/linux/io.github.MaDaAi.Zyclipa.metainfo.xml LICENSE packaging/THIRD-PARTY-NOTICES.txt build/linux-source/
-          cp src/main/resources/ui/icon-256.png src/main/resources/ui/icon-128.png build/linux-source/
       - name: Install Flatpak tools and runtimes
         run: |
           sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder xvfb
           flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak --user install -y --noninteractive flathub org.gnome.Platform//49 org.gnome.Sdk//49 org.freedesktop.Sdk.Extension.openjdk25//25.08
-      - name: Build the Flatpak
+      - name: Build the Flatpak (same script as releases, unsigned)
         run: |
-          flatpak-builder --user --force-clean --disable-rofiles-fuse --repo=build/repo build/app packaging/linux/io.github.MaDaAi.Zyclipa.json
-          mkdir -p dist
-          flatpak build-bundle build/repo "dist/Zyclipa-$V-Linux-x86_64.flatpak" io.github.MaDaAi.Zyclipa
-          (cd dist && sha256sum "Zyclipa-$V-Linux-x86_64.flatpak" > "Zyclipa-$V-Linux-x86_64.flatpak.sha256")
+          bash scripts/package-linux.sh
+          V=$(python3 -c "import re;print(re.search(r'<artifactId>zyclipa</artifactId>\s*<version>([^<]+)<',open('pom.xml').read()).group(1))")
+          echo "V=$V" >> "$GITHUB_ENV"
           ls -la dist
       - name: Check the Flatpak (install, FFmpeg, start on a virtual screen)
         run: |
