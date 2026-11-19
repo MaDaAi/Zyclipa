@@ -30,7 +30,9 @@ fi
 mkdir -p dist
 bundle="dist/Zyclipa-$version-Linux-x86_64.flatpak"
 bundle_args=(--runtime-repo=https://flathub.org/repo/flathub.flatpakrepo)
-[ -f "$pubkey" ] && bundle_args+=(--repo-url="$repo_url" --gpg-keys="$pubkey")
+# Only signed (release) builds remember the update repository: Flatpak refuses an unsigned bundle that claims a
+# signed source, so CI test bundles stay plain.
+if [ ${#sign[@]} -gt 0 ] && [ -f "$pubkey" ]; then bundle_args+=(--repo-url="$repo_url" --gpg-keys="$pubkey"); fi
 flatpak build-bundle "${bundle_args[@]}" build/linux-repo "$bundle" io.github.MaDaAi.Zyclipa stable
 (cd dist && sha256sum "$(basename "$bundle")" > "$(basename "$bundle").sha256")
 echo "Bundle: $bundle"
