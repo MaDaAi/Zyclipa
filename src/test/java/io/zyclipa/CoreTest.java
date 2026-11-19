@@ -87,7 +87,7 @@ class CoreTest {
             assertTrue(in.contains("audio=Mic A"));
         }
         List<String> map = CaptureArgs.mapping(s.recording);
-        assertEquals(List.of("-map", "0:v", "-map", "1:a", "-map", "2:a", "-metadata:s:a:0", "title=Mic A", "-metadata:s:a:1", "title=Cable B",
+        assertEquals(List.of("-map", "0:v", "-map", "1:a", "-map", "2:a", "-metadata:s:a:0", "title=Mic A", "-metadata:s:a:0", "handler_name=Mic A", "-metadata:s:a:1", "title=Cable B", "-metadata:s:a:1", "handler_name=Cable B",
                 "-c:a", "aac", "-b:a", "160k", "-ar", "48000"), map);
         s.recording.separateTracks = false;
         assertTrue(String.join(" ", CaptureArgs.mapping(s.recording)).contains("amix=inputs=2"));

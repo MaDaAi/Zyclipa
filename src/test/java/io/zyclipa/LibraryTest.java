@@ -139,6 +139,7 @@ class LibraryTest {
         Ffmpeg.Result r = ff.get().run(List.of("-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=30",
                 "-f", "lavfi", "-i", "sine=frequency=440", "-f", "lavfi", "-i", "sine=frequency=880", "-t", "5",
                 "-map", "0:v", "-map", "1:a", "-map", "2:a", "-metadata:s:a:0", "title=Game audio", "-metadata:s:a:1", "title=Microphone",
+                "-metadata:s:a:0", "handler_name=Game audio", "-metadata:s:a:1", "handler_name=Microphone",
                 "-c:v", "libx264", "-g", "30", "-c:a", "aac", src.toString()), 60);
         assertTrue(r.ok(), r.output());
         ClipLibrary l = lib(clips, ff);

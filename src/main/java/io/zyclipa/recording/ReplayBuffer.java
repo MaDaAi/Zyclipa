@@ -146,7 +146,8 @@ public final class ReplayBuffer {
                 List<String> args = new ArrayList<>(List.of("-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0",
                         "-i", list.toString(), "-map", "0", "-c", "copy"));
                 // MPEG-TS segments drop track names; put them back so the editor can label each lane.
-                for (int i = 0; i < trackTitles.size(); i++) args.addAll(List.of("-metadata:s:a:" + i, "title=" + trackTitles.get(i)));
+                for (int i = 0; i < trackTitles.size(); i++) args.addAll(List.of("-metadata:s:a:" + i, "title=" + trackTitles.get(i),
+                        "-metadata:s:a:" + i, "handler_name=" + trackTitles.get(i)));
                 if ("mp4".equals(r.container)) args.addAll(List.of("-bsf:a", "aac_adtstoasc", "-movflags", "+faststart"));
                 args.add(out.toString());
                 Ffmpeg.Result res = ff.run(args, 120);

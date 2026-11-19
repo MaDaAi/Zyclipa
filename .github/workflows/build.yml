@@ -32,7 +32,10 @@ jobs:
         working-directory: src/main/web
         run: npx -y -p typescript@5.6.3 tsc -p tsconfig.json --noEmit
       - name: Build and test
-        run: mvn -B -Dmaven.repo.local=${{ runner.temp }}/m2 package
+        shell: bash
+        run: |
+          set -o pipefail
+          mvn -B -Dmaven.repo.local="$RUNNER_TEMP/m2" package 2>&1 | tee build.log
       - name: Report failing tests (visible on the public run page)
         if: failure()
         shell: bash

@@ -73,7 +73,8 @@ public final class CaptureArgs {
         if (r.separateTracks || n == 1) {
             for (int i = 1; i <= n; i++) a.addAll(List.of("-map", i + ":a"));
             // Name each track so the clip editor can label the lanes.
-            for (int i = 0; i < n; i++) a.addAll(List.of("-metadata:s:a:" + i, "title=" + names.get(i)));
+            // Title for current FFmpeg, handler name for older ones (some only keep that in MP4).
+            for (int i = 0; i < n; i++) a.addAll(List.of("-metadata:s:a:" + i, "title=" + names.get(i), "-metadata:s:a:" + i, "handler_name=" + names.get(i)));
         } else {
             StringBuilder f = new StringBuilder();
             for (int i = 1; i <= n; i++) f.append('[').append(i).append(":a]");
