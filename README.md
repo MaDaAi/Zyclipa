@@ -14,12 +14,23 @@ behind interfaces so Linux and macOS back-ends can be added.
 
 ## Install and run
 
-### Option A – portable app (recommended for players)
-1. Download or build the `Zyclipa` folder (see *Build* below: `packaging/build-installer.ps1`).
+### Windows – portable app (recommended for players)
+1. Download `Zyclipa-<version>-windows-x64.zip` from [Releases](https://github.com/MaDaAi/Zyclipa/releases) and unzip it (or build it: `packaging/make-release.ps1`).
 2. Install FFmpeg (needed for recording, replays, thumbnails and MP3 import) – see *FFmpeg* below.
 3. Double-click `Zyclipa.exe`.
 
-### Option B – run the jar
+### Linux – Flatpak
+FFmpeg and Java are included. Download `Zyclipa-<version>-Linux-x86_64.flatpak`, then:
+```
+flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install --user Zyclipa-<version>-Linux-x86_64.flatpak
+flatpak run io.github.MaDaAi.Zyclipa
+```
+Recording uses X11 screen capture and PulseAudio/PipeWire sound. Per-app volume mixing, global shortcuts and game
+detection are Windows-only for now. The Flatpak is built by `.github/workflows/build.yml` (job `flatpak`); its Google
+sign-in comes from the `GOOGLE_OAUTH_JSON` repository secret.
+
+### Run the jar
 Requires Java 21 or newer.
 ```
 java --enable-native-access=ALL-UNNAMED -jar target/zyclipa.jar
