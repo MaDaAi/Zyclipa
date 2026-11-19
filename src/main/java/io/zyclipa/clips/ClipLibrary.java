@@ -291,7 +291,8 @@ public final class ClipLibrary {
             if (v <= 0.001) continue; // track removed
             fc.append("[0:a:").append(i).append("]volume=").append(fmt(v)).append("[a").append(i).append("];");
             maps.addAll(List.of("-map", "[a" + i + "]"));
-            if (i < c.audioTrackNames.size()) maps.addAll(List.of("-metadata:s:a:" + outIdx, "title=" + c.audioTrackNames.get(i)));
+            if (i < c.audioTrackNames.size()) maps.addAll(List.of("-metadata:s:a:" + outIdx, "title=" + c.audioTrackNames.get(i),
+                    "-metadata:s:a:" + outIdx, "handler_name=" + c.audioTrackNames.get(i)));
             outIdx++;
         }
         if (fc.length() > 0) { fc.setLength(fc.length() - 1); a.addAll(List.of("-filter_complex", fc.toString())); }
