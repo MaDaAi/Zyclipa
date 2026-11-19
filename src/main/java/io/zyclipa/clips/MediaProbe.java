@@ -48,6 +48,11 @@ final class MediaProbe {
                     JsonObject tags = s.has("tags") ? s.getAsJsonObject("tags") : null;
                     String title = tags == null ? "" : tags.has("title") ? tags.get("title").getAsString()
                             : tags.has("name") ? tags.get("name").getAsString() : ""; // MP4 keeps track titles as "name"
+                    // Older FFmpeg (e.g. Linux distros) writes an MP4 track title as its handler name.
+                    if (title.isBlank() && tags != null && tags.has("handler_name")) {
+                        String h = tags.get("handler_name").getAsString().trim();
+                        if (!h.isBlank() && !h.matches("(?i)(sound|audio|video)\\s*handler|core media audio|isomedia.*")) title = h;
+                    }
                     names.add(title.isBlank() ? "Audio track " + audio : title);
                 }
             }

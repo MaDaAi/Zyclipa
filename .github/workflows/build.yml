@@ -3,6 +3,7 @@ name: build
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -10,6 +11,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false   # let Windows and Linux both finish so each shows its own result
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
@@ -23,7 +25,7 @@ jobs:
       - name: Install FFmpeg (for the clip/trim tests)
         if: runner.os == 'Windows'
         run: choco install ffmpeg -y --no-progress
-      - name: Install FFmpeg (for the clip/trim tests)
+      - name: Install FFmpeg and a virtual screen
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg xvfb
       - name: Type-check the dashboard
@@ -35,22 +37,28 @@ jobs:
         if: failure()
         shell: bash
         run: python3 packaging/ci/report-tests.py || python packaging/ci/report-tests.py || true
-      - name: Self-test (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Start the app on a virtual screen (Linux)
+        if: runner.os == 'Linux'
         run: |
-          java -jar target/zyclipa.jar --self-test target/selftest.json
-          Get-Content target/selftest.json
+          mkdir -p shots
+          for page in clips soundboard mixer settings:Storage settings:General terms tray; do
+            name=$(echo "$page" | tr ':' '-')
+            timeout 180 xvfb-run -a java --enable-native-access=ALL-UNNAMED -jar target/zyclipa.jar \
+              --data-dir "$RUNNER_TEMP/zcheck" --page "$page" --screenshot "$PWD/shots/$name.png" || true
+            if [ ! -s "shots/$name.png" ]; then echo "::error::The $page page did not render on Linux"; exit 1; fi
+          done
+          ls -la shots
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
         with:
           name: zyclipa-${{ matrix.os }}
           path: |
             target/zyclipa.jar
-            target/selftest.json
+            shots/*.png
+          if-no-files-found: ignore
 
-  installer:
-    needs: build
-    runs-on: windows-latest
+  flatpak:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
@@ -58,12 +66,50 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Build jar
+      - name: Google sign-in client (repository secret, if set up)
+        env:
+          GOOGLE_OAUTH_JSON: ${{ secrets.GOOGLE_OAUTH_JSON }}
+        run: |
+          if [ -n "$GOOGLE_OAUTH_JSON" ]; then
+            mkdir -p private && printf '%s' "$GOOGLE_OAUTH_JSON" > private/google-oauth.json
+          else
+            echo "::warning::No GOOGLE_OAUTH_JSON secret - this Linux build has no Google Drive sign-in"
+          fi
+      - name: Build the Linux jar
         run: mvn -B -DskipTests package
-      - name: Windows installer (MSI via jpackage + WiX)
-        shell: pwsh
-        run: ./packaging/build-installer.ps1 -Type msi
+      - name: Stage the app files
+        run: |
+          V=$(python3 -c "import re;print(re.search(r'<artifactId>zyclipa</artifactId>\s*<version>([^<]+)<',open('pom.xml').read()).group(1))")
+          echo "V=$V" >> "$GITHUB_ENV"
+          mkdir -p build/linux-source
+          cp target/zyclipa.jar packaging/linux/zyclipa packaging/linux/io.github.MaDaAi.Zyclipa.desktop \
+             packaging/linux/io.github.MaDaAi.Zyclipa.metainfo.xml LICENSE packaging/THIRD-PARTY-NOTICES.txt build/linux-source/
+          cp src/main/resources/ui/icon-256.png src/main/resources/ui/icon-128.png build/linux-source/
+      - name: Install Flatpak tools and runtimes
+        run: |
+          sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder xvfb
+          flatpak --user remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak --user install -y --noninteractive flathub org.gnome.Platform//49 org.gnome.Sdk//49 org.freedesktop.Sdk.Extension.openjdk25//25.08
+      - name: Build the Flatpak
+        run: |
+          flatpak-builder --user --force-clean --disable-rofiles-fuse --repo=build/repo build/app packaging/linux/io.github.MaDaAi.Zyclipa.json
+          mkdir -p dist
+          flatpak build-bundle build/repo "dist/Zyclipa-$V-Linux-x86_64.flatpak" io.github.MaDaAi.Zyclipa
+          (cd dist && sha256sum "Zyclipa-$V-Linux-x86_64.flatpak" > "Zyclipa-$V-Linux-x86_64.flatpak.sha256")
+          ls -la dist
+      - name: Check the Flatpak (install, FFmpeg, start on a virtual screen)
+        run: |
+          flatpak --user install -y --noninteractive "dist/Zyclipa-$V-Linux-x86_64.flatpak"
+          flatpak run --command=ffmpeg io.github.MaDaAi.Zyclipa -hide_banner -encoders | grep -q libx264 || { echo "::error::The bundled FFmpeg has no H.264 encoder"; exit 1; }
+          flatpak run --command=ffmpeg io.github.MaDaAi.Zyclipa -hide_banner -devices | grep -q x11grab || { echo "::error::The bundled FFmpeg can't capture the screen (x11grab)"; exit 1; }
+          mkdir -p "$PWD/fshots"
+          timeout 240 xvfb-run -a flatpak run --filesystem="$PWD/fshots" io.github.MaDaAi.Zyclipa \
+            --data-dir "$PWD/fshots/data" --page clips --screenshot "$PWD/fshots/flatpak-clips.png" || true
+          if [ ! -s fshots/flatpak-clips.png ]; then echo "::error::The installed Flatpak did not start"; exit 1; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: zyclipa-windows-installer
-          path: dist/*.msi
+          name: zyclipa-linux-flatpak
+          path: |
+            dist/*.flatpak
+            dist/*.sha256
+            fshots/*.png
